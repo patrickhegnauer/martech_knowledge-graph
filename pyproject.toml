@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "martech-knowledge-graph"
+version = "0.1.0"
+description = "A maintenance UI + local API for a martech knowledge graph (RDFS ontology in Turtle, queried with SPARQL)."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "rdflib",
+    "flask",
+]
+
+[project.scripts]
+martech-knowledge-graph = "martech_knowledge_graph.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+martech_knowledge_graph = [
+    "ontology/*.ttl",
+    "examples/*.ttl",
+    "ui/*.html",
+    "ui/*.md",
+    "ui/css/*.css",
+    "ui/vendor/*",
+]

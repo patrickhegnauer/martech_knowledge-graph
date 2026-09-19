@@ -1,0 +1,57 @@
+@prefix data: <https://example.org/martech/data/login/> .
+@prefix martech: <https://example.org/martech/ontology/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+data:dlv_page_info_name a martech:DataLayerVariable ;
+    rdfs:label "digitalData.page.pageInfo.name" ;
+    martech:maps_to data:component_page_name ;
+    martech:source_system "Web data layer (digitalData)" .
+
+data:journey_login a martech:Journey ;
+    rdfs:label "Customer login journey" ;
+    martech:has_stage data:stage_login,
+        data:stage_login_success ;
+    martech:owner "Product Analytics" .
+
+data:measurement_login a martech:Measurement ;
+    martech:filter_value "/customer/login" ;
+    martech:measured_component data:component_page_name ;
+    martech:measured_entity data:stage_login .
+
+data:measurement_login_success a martech:Measurement ;
+    martech:filter_value "/customer/login/success" ;
+    martech:measured_component data:component_page_name ;
+    martech:measured_entity data:stage_login_success .
+
+data:req_login_frequency a martech:Requirement ;
+    rdfs:label "Understand monthly login frequency" ;
+    rdfs:comment "We want to know how many logins we have monthly (MAU), and how that compares to overall sessions." ;
+    martech:addressed_by data:kpi_login_rate ;
+    martech:status "active" .
+
+data:kpi_login_rate a martech:KPI ;
+    rdfs:label "Monthly login rate" ;
+    rdfs:comment "Target: 35% of monthly sessions include a login (illustrative example, not a real commitment)." ;
+    martech:formula "Monthly logins / Sessions" ;
+    martech:owner "Product Analytics" ;
+    martech:target 0.35 .
+
+data:stage_login a martech:Stage ;
+    rdfs:label "Login" ;
+    martech:order 1 .
+
+data:stage_login_success a martech:Stage ;
+    rdfs:label "Login success" ;
+    martech:order 2 ;
+    martech:rolls_up_to data:kpi_login_rate .
+
+data:component_page_name a martech:Component ;
+    rdfs:label "Page name" ;
+    martech:caveats "A shared, general-purpose dimension — filtering by value (e.g. /customer/login) is required to isolate a specific journey step. The raw component alone doesn't identify a stage." ;
+    martech:component_type "dimension" ;
+    martech:context "A general-purpose dimension, likely reused by other journeys in a real implementation — filtering by value is what distinguishes each specific use, not the component itself." ;
+    martech:definition "The page name/path captured on each page view; used here to identify funnel steps by value." ;
+    martech:owner "Digital Analytics" ;
+    martech:refs <https://sandbox/SANDBOX_NAME/xdm/web.webPageDetails.name> .
+

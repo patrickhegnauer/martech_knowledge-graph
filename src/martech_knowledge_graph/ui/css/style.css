@@ -1,0 +1,389 @@
+/* Martech Knowledge Graph platform - shared stylesheet */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, Segoe UI, Helvetica, Arial, sans-serif;
+  color: #1a1a1a;
+  background: #f7f7f5;
+  line-height: 1.4;
+}
+
+header.site-header {
+  background: #1f2a44;
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+}
+
+header.site-header h1 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+nav.site-nav {
+  background: #2a3a5c;
+}
+
+nav.site-nav ul {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0 1.5rem;
+}
+
+nav.site-nav li {
+  margin: 0;
+}
+
+nav.site-nav a {
+  display: block;
+  padding: 0.6rem 0.9rem;
+  color: #d7ddee;
+  text-decoration: none;
+  font-size: 0.9rem;
+  border-bottom: 3px solid transparent;
+}
+
+nav.site-nav a:hover {
+  color: #fff;
+}
+
+nav.site-nav li.active a {
+  color: #fff;
+  border-bottom-color: #5b8def;
+  font-weight: 600;
+}
+
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+h2 {
+  margin-top: 0;
+}
+
+section {
+  margin-bottom: 2rem;
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 1rem 1.25rem;
+}
+
+.layout-two-col {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.layout-two-col .col-main {
+  flex: 3;
+  min-width: 0;
+}
+
+.layout-two-col .col-side {
+  flex: 1;
+  min-width: 220px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid #e4e4e4;
+  font-size: 0.9rem;
+}
+
+th {
+  background: #eef1f7;
+  font-weight: 600;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+button, .btn {
+  cursor: pointer;
+  background: #2a3a5c;
+  color: #fff;
+  border: none;
+  padding: 0.45rem 0.9rem;
+  border-radius: 3px;
+  font-size: 0.9rem;
+}
+
+button.secondary {
+  background: #fff;
+  color: #2a3a5c;
+  border: 1px solid #2a3a5c;
+}
+
+input[type="text"], input[type="search"], input[type="file"], select, textarea {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+textarea {
+  width: 100%;
+  display: block;
+}
+
+form.field-form label {
+  display: block;
+  font-weight: 600;
+  margin: 0.8rem 0 0.2rem;
+  font-size: 0.85rem;
+}
+
+form.field-form input[type="text"],
+form.field-form textarea {
+  width: 100%;
+}
+
+.readonly-block {
+  background: #f2f3f6;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.readonly-block dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+}
+
+.readonly-block dt {
+  font-weight: 600;
+  color: #555;
+}
+
+.readonly-block dd {
+  margin: 0;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-has-context {
+  background: #dff3e3;
+  color: #206a35;
+}
+
+.badge-missing-context {
+  background: #fbe4e1;
+  color: #9a2f22;
+}
+
+.badge-not-deployed {
+  background: #f0e2a3;
+  color: #6b5300;
+}
+
+pre.code-block {
+  background: #1f2a44;
+  color: #e6e9f2;
+  padding: 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.82rem;
+}
+
+.checklist {
+  list-style: none;
+  padding: 0;
+}
+
+.checklist li {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.checklist .step-marker {
+  display: inline-block;
+  width: 1.3rem;
+  height: 1.3rem;
+  border: 2px solid #2a3a5c;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.counters {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.counter {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 0.75rem 1.25rem;
+  min-width: 140px;
+}
+
+.counter .value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  display: block;
+}
+
+.counter .label {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.placeholder-canvas {
+  background: repeating-linear-gradient(45deg, #eceff5, #eceff5 10px, #f5f6fa 10px, #f5f6fa 20px);
+  border: 2px dashed #a9b3c9;
+  border-radius: 4px;
+  height: 420px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #5a6478;
+  font-size: 0.95rem;
+  text-align: center;
+  padding: 1rem;
+}
+
+.checkbox-list label {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+}
+
+.status-banner {
+  background: #fdf1d6;
+  border: 1px solid #e9c66b;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  margin-bottom: 1.25rem;
+}
+
+.note {
+  font-size: 0.85rem;
+  color: #555;
+  background: #f0f1f5;
+  border-left: 3px solid #5b8def;
+  padding: 0.5rem 0.8rem;
+  margin: 1rem 0;
+}
+
+.ontology-ref dt {
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+.ontology-ref dd {
+  margin: 0 0 0.3rem;
+  font-size: 0.85rem;
+  color: #444;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 24, 38, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-overlay[hidden] {
+  display: none;
+}
+
+.modal-box {
+  background: #fff;
+  border-radius: 6px;
+  width: 480px;
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.modal-box h3 {
+  margin-top: 0;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 1.1rem;
+  padding: 0.1rem 0.4rem;
+}
+
+.modal-close:hover {
+  color: #000;
+}
+
+.scope-list label {
+  display: block;
+  font-weight: normal;
+  font-size: 0.85rem;
+  margin: 0.2rem 0;
+}
+
+.cja-status-line {
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.cja-status-line.connected {
+  color: #206a35;
+  font-weight: 600;
+}
+
+footer.site-footer {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #888;
+  padding: 1.5rem;
+}

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MCP — Martech Knowledge Graph</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="site-header">
+  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+</header>
+<nav class="site-nav">
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="ontology.html">Ontology</a></li>
+    <li><a href="components.html">Components</a></li>
+    <li><a href="journeys.html">Journeys</a></li>
+    <li><a href="graph.html">Graph</a></li>
+    <li><a href="query.html">Query</a></li>
+    <li><a href="data-files.html">Data Files</a></li>
+    <li class="active"><a href="mcp.html">MCP</a></li>
+  </ul>
+</nav>
+<main>
+  <section>
+    <div class="status-banner">Not built yet — built last. The MCP is deployed only after the authoring loop (pull → context → journeys → graph → query) is trusted.</div>
+
+    <h2>Planned tool set</h2>
+    <p>Single-doorway principle: one query interface, not multiple competing tools.</p>
+    <table>
+      <thead>
+        <tr><th>Tool</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr data-tool-name="run_sparql">
+          <td><code>run_sparql</code></td>
+          <td>Execute a SPARQL query against the flat .ttl files and return results.</td>
+        </tr>
+        <tr data-tool-name="get_ontology_schema">
+          <td><code>get_ontology_schema</code></td>
+          <td>Documentation/ontology tool — returns the classes and properties available to query against.</td>
+        </tr>
+      </tbody>
+    </table>
+    <!-- WIRE: expose these two tools over MCP | reuses: run_sparql pattern (conceptual, from platform-mvp-handoff.md), martech-ontology.ttl -->
+
+    <h2>Endpoint</h2>
+    <div class="panel">
+      <p id="endpoint-placeholder">MCP endpoint: not yet deployed</p>
+      <p><span class="badge badge-not-deployed">Not deployed</span></p>
+    </div>
+    <!-- WIRE: show live endpoint URL and deployment status once the MCP exists | reuses: future MCP server -->
+  </section>
+</main>
+<footer class="site-footer">Static UI shell — no backend, no JavaScript.</footer>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Journeys — Martech Knowledge Graph</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="site-header">
+  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+</header>
+<nav class="site-nav">
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="ontology.html">Ontology</a></li>
+    <li><a href="components.html">Components</a></li>
+    <li class="active"><a href="journeys.html">Journeys</a></li>
+    <li><a href="graph.html">Graph</a></li>
+    <li><a href="query.html">Query</a></li>
+    <li><a href="data-files.html">Data Files</a></li>
+    <li><a href="mcp.html">MCP</a></li>
+  </ul>
+</nav>
+<main>
+  <section>
+    <h2>Journeys</h2>
+    <p class="note">Journeys stay CSV-based — see platform-mvp-handoff.md. A Journey is compound (requirement + KPI + several stages + measurements), so it is authored as a spreadsheet/CSV via <code>journey_builder.py</code> rather than a form. No wizard is planned unless the CSV path proves insufficient in practice.</p>
+    <p class="note" id="live-mode-note">Checking for a local API…</p>
+
+    <table id="table-journeys">
+      <thead>
+        <tr>
+          <th>Journey</th>
+          <th>Requirement</th>
+          <th>Stages</th>
+          <th>KPIs</th>
+          <th>Last generated</th>
+        </tr>
+      </thead>
+      <tbody id="journeys-tbody">
+        <tr data-journey-slug="ecommerce">
+          <td>Ecommerce purchase journey</td>
+          <td>Understand shop performance and drop-off</td>
+          <td>4</td>
+          <td>1</td>
+          <td>2026-08-14</td>
+        </tr>
+        <tr data-journey-slug="login">
+          <td>Customer login journey</td>
+          <td>Understand monthly login frequency</td>
+          <td>2</td>
+          <td>1</td>
+          <td>2026-08-14</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Upload / paste a journey CSV</h2>
+    <div class="panel">
+      <label for="input-journey-csv">Upload CSV file</label>
+      <input type="file" id="input-journey-csv" name="journey_csv" accept=".csv">
+
+      <p>— or paste CSV content —</p>
+      <textarea id="textarea-journey-csv" rows="6" placeholder="Paste CSV rows here"></textarea>
+
+      <p>
+        <button type="button" id="btn-validate-csv" class="secondary">Validate</button>
+        <button type="button" id="btn-generate-turtle">Generate turtle</button>
+      </p>
+
+      <h3>Expected CSV format</h3>
+      <pre class="code-block">journey_slug,journey_label,journey_owner,requirement_label,requirement_comment,kpi_label,kpi_formula,kpi_owner,kpi_target,kpi_comment,stage_key,stage_label,stage_order,rolls_up_to_kpi,component_key,component_label,component_type,component_definition,component_caveats,component_context,component_owner,component_xdm_path,filter_value,data_layer_variable,data_layer_source_system
+ecommerce,Ecommerce purchase journey,Digital Marketing,Understand shop performance and drop-off,"We want to understand how our shop is performing, and where in the journey people drop off.",Order conversion rate,Orders / Product Views,Ecommerce / Digital Marketing,0.0020,"Current value (2026): 0.11%. Target: 0.20% (illustrative example, not a real commitment).",product_view,Product view,1,no,product_views,Product views,metric,Number of times a product detail page was viewed.,"Counts page views, not unique visitors — a visitor viewing the same product twice counts twice.",Entry point for the purchase funnel; used to benchmark top-of-funnel demand.,Digital Analytics,commerce.productViews.value,,digitalData.conversion.conversionFunnel.step,Web data layer (digitalData)</pre>
+
+      <h3>Output preview</h3>
+      <div id="output-preview">
+        <pre class="code-block">@prefix martech: &lt;https://example.org/martech/ontology/&gt; .
+
+martech:journey_ecommerce
+  a martech:Journey ;
+  rdfs:label "Ecommerce purchase journey" ;
+  martech:owner "Digital Marketing" ;
+  martech:has_stage martech:stage_ecommerce_product_view , martech:stage_ecommerce_cart_add ,
+                     martech:stage_ecommerce_checkout , martech:stage_ecommerce_order .
+&hellip;</pre>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running — see components.html for setup. Falls back to a static example otherwise.</footer>
+
+<script>
+const CSV_COLUMNS = [
+  "journey_slug", "journey_label", "journey_owner",
+  "requirement_label", "requirement_comment",
+  "kpi_label", "kpi_formula", "kpi_owner", "kpi_target", "kpi_comment",
+  "stage_key", "stage_label", "stage_order", "rolls_up_to_kpi",
+  "component_key", "component_label", "component_type",
+  "component_definition", "component_caveats", "component_context",
+  "component_owner", "component_xdm_path", "filter_value",
+  "data_layer_variable", "data_layer_source_system",
+];
+
+function renderJourneysTable(journeys) {
+  const tbody = document.getElementById("journeys-tbody");
+  tbody.innerHTML = "";
+  journeys.forEach(j => {
+    const tr = document.createElement("tr");
+    tr.dataset.journeySlug = j.slug;
+    tr.innerHTML =
+      "<td>" + j.label + "</td>" +
+      "<td>" + (j.requirement || "—") + "</td>" +
+      "<td>" + j.stages + "</td>" +
+      "<td>" + j.kpis + "</td>" +
+      "<td>" + j.last_generated + "</td>";
+    tbody.appendChild(tr);
+  });
+}
+
+function loadLiveJourneys() {
+  const note = document.getElementById("live-mode-note");
+  fetch("/api/state")
+    .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
+    .then(data => {
+      renderJourneysTable(data.journeys);
+      note.textContent = "Live data — " + data.journeys.length + " journey file(s) on disk.";
+    })
+    .catch(() => {
+      note.textContent = "Showing static sample data — start the local API (`martech-knowledge-graph serve`) for live data.";
+    });
+}
+loadLiveJourneys();
+
+document.getElementById("input-journey-csv").addEventListener("change", ev => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { document.getElementById("textarea-journey-csv").value = reader.result; };
+  reader.readAsText(file);
+});
+
+function showOutput(text) {
+  const outputEl = document.getElementById("output-preview");
+  outputEl.innerHTML = "";
+  const pre = document.createElement("pre");
+  pre.className = "code-block";
+  pre.textContent = text;
+  outputEl.appendChild(pre);
+}
+
+// Sanity-checks column headers only (not a full RFC-4180 CSV parser) — real
+// row-by-row validation happens server-side via journey_builder.py when
+// Generate turtle runs.
+function validateCsv(text) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n").filter(l => l.trim().length > 0);
+  if (lines.length === 0) return { ok: false, message: "CSV is empty." };
+  const header = lines[0].split(",").map(h => h.trim());
+  const missing = CSV_COLUMNS.filter(c => !header.includes(c));
+  if (missing.length) return { ok: false, message: "Missing column(s): " + missing.join(", ") };
+  if (lines.length < 2) return { ok: false, message: "No data rows found below the header." };
+  const extra = header.filter(c => !CSV_COLUMNS.includes(c));
+  let message = "Looks valid — " + header.length + " column(s), " + (lines.length - 1) + " data row(s). Click Generate turtle to write it.";
+  if (extra.length) message += " (unrecognized column(s), ignored: " + extra.join(", ") + ")";
+  return { ok: true, message };
+}
+
+document.getElementById("btn-validate-csv").addEventListener("click", () => {
+  const result = validateCsv(document.getElementById("textarea-journey-csv").value);
+  showOutput((result.ok ? "✓ " : "✗ ") + result.message);
+});
+
+document.getElementById("btn-generate-turtle").addEventListener("click", () => {
+  const csvText = document.getElementById("textarea-journey-csv").value;
+  showOutput("Generating…");
+
+  fetch("/api/journeys/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ csv_text: csvText }),
+  })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (!ok) throw new Error(data.error || "generate failed");
+      showOutput(data.turtle);
+      loadLiveJourneys();
+    })
+    .catch(err => {
+      const hint = err instanceof TypeError ? " (is `martech-knowledge-graph serve` running?)" : "";
+      showOutput("Error: " + err.message + hint);
+    });
+});
+</script>
+</body>
+</html>

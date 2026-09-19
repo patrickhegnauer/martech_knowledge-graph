@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Query — Martech Knowledge Graph</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="site-header">
+  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+</header>
+<nav class="site-nav">
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="ontology.html">Ontology</a></li>
+    <li><a href="components.html">Components</a></li>
+    <li><a href="journeys.html">Journeys</a></li>
+    <li><a href="graph.html">Graph</a></li>
+    <li class="active"><a href="query.html">Query</a></li>
+    <li><a href="data-files.html">Data Files</a></li>
+    <li><a href="mcp.html">MCP</a></li>
+  </ul>
+</nav>
+<main>
+  <section>
+    <h2>SPARQL query</h2>
+    <p class="note" id="engine-status">Loading SPARQL engine…</p>
+    <p class="note">Runs real SPARQL 1.1 (via Oxigraph, compiled to WASM, vendored locally — no CDN) against martech-ontology.ttl + *-instances.ttl, embedded on this page. Same data graph_explorer.py loads.</p>
+    <div class="layout-two-col">
+      <div class="col-main">
+        <label for="select-sample-query">Sample query</label>
+        <select id="select-sample-query">
+          <option value="component-context">Component business context</option>
+          <option value="funnel-walk">Funnel walk (stage → component → refs)</option>
+          <option value="journey-explorer">Journey / stage / component explorer</option>
+        </select>
+
+        <p>
+          <textarea id="textarea-sparql" rows="10">PREFIX martech: &lt;https://example.org/martech/ontology/&gt;
+PREFIX rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;
+SELECT ?label ?definition ?caveats ?owner WHERE {
+  ?comp a martech:Component ; rdfs:label ?label .
+  OPTIONAL { ?comp martech:definition ?definition . }
+  OPTIONAL { ?comp martech:caveats ?caveats . }
+  OPTIONAL { ?comp martech:owner ?owner . }
+} ORDER BY ?label</textarea>
+        </p>
+        <button type="button" id="btn-run-query" disabled>Run</button>
+        <span id="query-status"></span>
+
+        <h3>Results</h3>
+        <table id="table-query-results">
+          <thead>
+            <tr></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="col-side">
+        <div class="panel ontology-ref">
+          <h3>Ontology reference</h3>
+          <p><strong>Classes</strong></p>
+          <dl>
+            <dt>Requirement</dt><dd>Business problem/question justifying tracking.</dd>
+            <dt>KPI</dt><dd>Measurable objective addressing a requirement.</dd>
+            <dt>Journey</dt><dd>Named end-to-end customer path.</dd>
+            <dt>Stage</dt><dd>Ordered step within a journey.</dd>
+            <dt>Feature</dt><dd>Reusable functional capability.</dd>
+            <dt>Component</dt><dd>Metric or dimension from the semantic layer.</dd>
+            <dt>DataLayerVariable</dt><dd>Raw implementation artifact.</dd>
+            <dt>StageTransition</dt><dd>Empirical transition between two stages.</dd>
+            <dt>Measurement</dt><dd>"measured_by" relation between a Stage/Feature and a Component.</dd>
+          </dl>
+          <p><strong>Properties</strong></p>
+          <dl>
+            <dt>addressed_by, has_stage, uses_feature, rolls_up_to, contributes_to, maps_to, refs</dt><dd>object properties</dd>
+            <dt>transition_from, transition_to, conversion_rate, measured_entity, measured_component, filter_value</dt><dd>n-ary relation properties</dd>
+            <dt>status, formula, target, order, entry_criteria, definition, caveats, context, component_type, source_system, owner</dt><dd>datatype (literal) properties</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="site-footer">Query page runs a real SPARQL engine (JS/WASM). All other pages except Graph remain static and JS-free.</footer>
+
+<script src="vendor/oxigraph.wasm.b64.js"></script>
+<script src="vendor/oxigraph.web.js"></script>
+<script src="vendor/graph-data.ttl.js"></script>
+<script>
+const SAMPLE_QUERIES = {
+  "component-context": document.getElementById("textarea-sparql").value,
+  "funnel-walk":
+`PREFIX martech: <https://example.org/martech/ontology/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?order ?stageLabel ?componentLabel ?ref WHERE {
+  ?stage a martech:Stage ; martech:order ?order ; rdfs:label ?stageLabel .
+  ?m a martech:Measurement ;
+     martech:measured_entity ?stage ;
+     martech:measured_component ?comp .
+  ?comp rdfs:label ?componentLabel ; martech:refs ?ref .
+} ORDER BY ?order`,
+  "journey-explorer":
+`PREFIX martech: <https://example.org/martech/ontology/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?journeyLabel ?order ?stageLabel ?compLabel ?filterValue WHERE {
+  ?journey a martech:Journey ; rdfs:label ?journeyLabel ; martech:has_stage ?stage .
+  ?stage martech:order ?order ; rdfs:label ?stageLabel .
+  ?m martech:measured_entity ?stage ; martech:measured_component ?comp .
+  ?comp rdfs:label ?compLabel .
+  OPTIONAL { ?m martech:filter_value ?filterValue . }
+} ORDER BY ?journeyLabel ?order`,
+};
+
+document.getElementById("select-sample-query").addEventListener("change", ev => {
+  document.getElementById("textarea-sparql").value = SAMPLE_QUERIES[ev.target.value];
+});
+
+function base64ToUint8Array(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function extractSelectVars(queryText) {
+  const m = queryText.match(/SELECT\s+(.*?)\s+WHERE/is);
+  if (!m) return [];
+  return m[1].trim().split(/\s+/).filter(v => v.startsWith("?")).map(v => v.slice(1));
+}
+
+function clearResults() {
+  document.querySelector("#table-query-results thead tr").innerHTML = "";
+  document.querySelector("#table-query-results tbody").innerHTML = "";
+}
+
+function renderBindings(results, queryText) {
+  const theadRow = document.querySelector("#table-query-results thead tr");
+  const tbody = document.querySelector("#table-query-results tbody");
+  const vars = extractSelectVars(queryText);
+  const keys = vars.length ? vars : (results[0] ? Array.from(results[0].keys()) : []);
+  keys.forEach(k => {
+    const th = document.createElement("th");
+    th.textContent = k;
+    theadRow.appendChild(th);
+  });
+  results.forEach(row => {
+    const tr = document.createElement("tr");
+    keys.forEach(k => {
+      const term = row.get(k);
+      const td = document.createElement("td");
+      td.textContent = term ? term.value : "—";
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function renderQuads(quads) {
+  const theadRow = document.querySelector("#table-query-results thead tr");
+  const tbody = document.querySelector("#table-query-results tbody");
+  ["subject", "predicate", "object", "graph"].forEach(h => {
+    const th = document.createElement("th");
+    th.textContent = h;
+    theadRow.appendChild(th);
+  });
+  quads.forEach(q => {
+    const tr = document.createElement("tr");
+    [q.subject, q.predicate, q.object, q.graph].forEach(term => {
+      const td = document.createElement("td");
+      td.textContent = term ? term.value : "";
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+let store = null;
+
+function runQuery() {
+  const queryText = document.getElementById("textarea-sparql").value;
+  const statusEl = document.getElementById("query-status");
+  clearResults();
+  try {
+    const results = store.query(queryText);
+    if (typeof results === "boolean") {
+      statusEl.textContent = "ASK result: " + results;
+    } else if (Array.isArray(results) && results.length && results[0] instanceof Oxigraph.Quad) {
+      renderQuads(results);
+      statusEl.textContent = results.length + " triple(s).";
+    } else if (Array.isArray(results)) {
+      renderBindings(results, queryText);
+      statusEl.textContent = results.length + " row(s).";
+    } else {
+      statusEl.textContent = String(results);
+    }
+  } catch (err) {
+    statusEl.textContent = "Query error: " + err.message;
+  }
+}
+
+document.getElementById("btn-run-query").addEventListener("click", runQuery);
+// WIRE: (implemented above) execute the SPARQL query against the loaded graph and render results | reuses: Oxigraph WASM SPARQL engine, same martech-ontology.ttl + *-instances.ttl graph_explorer.py loads
+
+(function init() {
+  const statusEl = document.getElementById("engine-status");
+  try {
+    Oxigraph.initSync({ module: base64ToUint8Array(OXIGRAPH_WASM_B64) });
+    store = new Oxigraph.Store();
+  } catch (err) {
+    statusEl.textContent = "Failed to start SPARQL engine: " + err.message;
+    return;
+  }
+
+  fetch("/api/ttl-bundle")
+    .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
+    .then(bundle => {
+      store.load(bundle.ontology, { format: "text/turtle" });
+      Object.values(bundle.instances).forEach(text => store.load(text, { format: "text/turtle" }));
+      statusEl.textContent = "SPARQL engine ready — " + store.size + " triples loaded — live.";
+      document.getElementById("btn-run-query").disabled = false;
+      runQuery();
+    })
+    .catch(() => {
+      store.load(ONTOLOGY_TTL, { format: "text/turtle" });
+      store.load(ECOMMERCE_TTL, { format: "text/turtle" });
+      store.load(LOGIN_TTL, { format: "text/turtle" });
+      statusEl.textContent = "SPARQL engine ready — " + store.size + " triples loaded — static snapshot (start `martech-knowledge-graph serve` for live data).";
+      document.getElementById("btn-run-query").disabled = false;
+      runQuery();
+    });
+})();
+</script>
+</body>
+</html>

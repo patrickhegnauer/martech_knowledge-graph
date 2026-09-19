@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Martech Knowledge Graph</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="site-header">
+  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+</header>
+<nav class="site-nav">
+  <ul>
+    <li class="active"><a href="index.html">Home</a></li>
+    <li><a href="ontology.html">Ontology</a></li>
+    <li><a href="components.html">Components</a></li>
+    <li><a href="journeys.html">Journeys</a></li>
+    <li><a href="graph.html">Graph</a></li>
+    <li><a href="query.html">Query</a></li>
+    <li><a href="data-files.html">Data Files</a></li>
+    <li><a href="mcp.html">MCP</a></li>
+  </ul>
+</nav>
+<main>
+  <section>
+    <h2>End-to-end loop</h2>
+    <p>The platform proves one loop: pull a component, add business context, author a journey, see it in the graph, then query it.</p>
+    <ol class="checklist">
+      <li><span class="step-marker"></span> <a href="components.html">1. Pull components from CJA</a></li>
+      <li><span class="step-marker"></span> <a href="component-edit.html">2. Add context to a component</a></li>
+      <li><span class="step-marker"></span> <a href="journeys.html">3. Author journeys (CSV)</a></li>
+      <li><span class="step-marker"></span> <a href="graph.html">4. View the graph</a></li>
+      <li><span class="step-marker"></span> <a href="query.html">5. Query the graph</a></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Status</h2>
+    <p class="note" id="live-mode-note">Checking for a local API…</p>
+    <div class="counters">
+      <div class="counter">
+        <span class="value" id="counter-total">5</span>
+        <span class="label">Components total</span>
+      </div>
+      <div class="counter">
+        <span class="value" id="counter-with-context">3</span>
+        <span class="label">Components with context</span>
+      </div>
+      <div class="counter">
+        <span class="value" id="counter-coverage">60%</span>
+        <span class="label">Context coverage</span>
+      </div>
+      <div class="counter">
+        <span class="value" id="counter-journeys">2</span>
+        <span class="label">Journeys</span>
+      </div>
+      <div class="counter">
+        <span class="value" id="counter-triples">~120</span>
+        <span class="label">Triples in graph</span>
+      </div>
+    </div>
+    <p>
+      <button type="button" id="btn-load-demo" class="secondary">Load demo data</button>
+      <span id="demo-load-status" class="note" style="display:none;"></span>
+    </p>
+    <p class="note">Starts empty on a fresh install — click this to seed the two example journeys (ecommerce funnel, customer login) so there's something to explore. Safe to click again; it skips files that already exist.</p>
+  </section>
+
+  <section>
+    <h2>Other pages</h2>
+    <ul>
+      <li><a href="data-files.html">Data files</a> — the flat .ttl files that back the graph.</li>
+      <li><a href="mcp.html">MCP</a> — planned query doorway (not built yet).</li>
+    </ul>
+  </section>
+</main>
+<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running. Falls back to static sample numbers otherwise.</footer>
+
+<script>
+function refreshCounters() {
+  return fetch("/api/state")
+    .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
+    .then(data => {
+      const total = data.components.length;
+      const withContext = data.components.filter(c => c.has_context).length;
+      const pct = total ? Math.round((withContext / total) * 100) : 0;
+
+      document.getElementById("counter-total").textContent = total;
+      document.getElementById("counter-with-context").textContent = withContext;
+      document.getElementById("counter-coverage").textContent = pct + "%";
+      document.getElementById("counter-journeys").textContent = data.journeys.length;
+      document.getElementById("counter-triples").textContent = data.triple_count;
+      document.getElementById("live-mode-note").textContent = "Live data.";
+      return true;
+    })
+    .catch(() => {
+      document.getElementById("live-mode-note").textContent =
+        "Showing static sample numbers — start the local API (`martech-knowledge-graph serve`) for live data.";
+      return false;
+    });
+}
+refreshCounters();
+
+document.getElementById("btn-load-demo").addEventListener("click", () => {
+  const statusEl = document.getElementById("demo-load-status");
+  statusEl.textContent = "Loading…";
+  statusEl.style.display = "inline";
+
+  fetch("/api/demo/load", { method: "POST" })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (!ok) throw new Error(data.error || "load failed");
+      if (data.added.length) {
+        statusEl.textContent = "Added: " + data.added.join(", ") + ".";
+      } else {
+        statusEl.textContent = "Demo data already present — nothing to add.";
+      }
+      refreshCounters();
+    })
+    .catch(err => {
+      statusEl.textContent = "Could not reach the local API (" + err.message + ") — run `martech-knowledge-graph serve` first.";
+    });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ontology — Martech Knowledge Graph</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="site-header">
+  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+</header>
+<nav class="site-nav">
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li class="active"><a href="ontology.html">Ontology</a></li>
+    <li><a href="components.html">Components</a></li>
+    <li><a href="journeys.html">Journeys</a></li>
+    <li><a href="graph.html">Graph</a></li>
+    <li><a href="query.html">Query</a></li>
+    <li><a href="data-files.html">Data Files</a></li>
+    <li><a href="mcp.html">MCP</a></li>
+  </ul>
+</nav>
+<main>
+  <section>
+    <h2>Ontology</h2>
+    <p>This project models business meaning (journeys, KPIs, requirements) alongside technical metadata (XDM components, data layer variables) as one connected graph. The schema is defined in <code>martech-ontology.ttl</code> — RDFS-level only, intentionally: no OWL reasoning or constraints, just classes and properties.</p>
+  </section>
+
+  <section>
+    <h3>The core chain</h3>
+    <p><strong>Requirement → KPI → Journey → Stage → Feature → Component → DataLayerVariable</strong> — from business question down to raw implementation.</p>
+    <p>A <code>Requirement</code> is the business problem or hypothesis that justifies tracking something. It's <code>addressed_by</code> a <code>KPI</code>, the measurable objective. A <code>Journey</code> <code>has_stage</code>s in order, and each <code>Stage</code> can <code>use_feature</code> a reusable <code>Feature</code> and <code>rolls_up_to</code> a KPI. A <code>Component</code> is a metric or dimension from the semantic layer (CJA Semantic Layer MCP) — its identity stays authoritative in AEP, but its business meaning (<code>definition</code>, <code>caveats</code>, <code>context</code>, <code>owner</code>) is curated here, since a platform's own technical metadata graph structurally has no field for that. A <code>DataLayerVariable</code> is the raw implementation artifact (e.g. a data layer field) that <code>maps_to</code> the component it populates.</p>
+  </section>
+
+  <section>
+    <h3>Why Measurement and StageTransition exist</h3>
+    <p>A plain RDF predicate connects two resources with no attribute of its own. Some relationships in this model need one — a <code>StageTransition</code> carries a <code>conversion_rate</code>, and a <code>Measurement</code> (a "measured_by" link between a Stage or Feature and a Component) can carry a <code>filter_value</code> (e.g. a specific page-name value that identifies the stage). Both are modeled as their own nodes instead of direct triples, following the <a href="https://www.w3.org/TR/swbp-n-aryRelations/">W3C n-ary relations pattern</a>. Neither is a "real" business entity — they exist purely to hold that extra attribute.</p>
+  </section>
+
+  <section>
+    <h3>Classes</h3>
+    <table>
+      <thead><tr><th>Class</th><th>Comment</th></tr></thead>
+      <tbody>
+        <tr><td><code>Requirement</code></td><td>The business problem, question, or hypothesis that justifies tracking something.</td></tr>
+        <tr><td><code>KPI</code></td><td>A measurable objective that addresses a requirement.</td></tr>
+        <tr><td><code>Journey</code></td><td>A named, end-to-end customer path.</td></tr>
+        <tr><td><code>Stage</code></td><td>An ordered step within a journey.</td></tr>
+        <tr><td><code>Feature</code></td><td>A reusable functional capability of the product. Not sequential; can be used by multiple stages or journeys.</td></tr>
+        <tr><td><code>Component</code></td><td>A metric or dimension from the semantic layer (CJA Semantic Layer MCP). Identity is authoritative in AEP; business meaning (definition, caveats, context) is curated here.</td></tr>
+        <tr><td><code>DataLayerVariable</code></td><td>The raw implementation artifact (e.g. a data layer field) that populates a component.</td></tr>
+        <tr><td><code>StageTransition</code></td><td>An empirical transition between two stages (CJA-sourced), carrying a conversion rate. Stands in for a plain "next" predicate because the relationship itself has an attribute.</td></tr>
+        <tr><td><code>Measurement</code></td><td>A "measured_by" relationship between a Stage or Feature and a Component, optionally qualified by a filter value (e.g. a specific page-name value that identifies the stage).</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h3>Object properties — core chain</h3>
+    <table>
+      <thead><tr><th>Property</th><th>Domain</th><th>Range</th><th>Comment</th></tr></thead>
+      <tbody>
+        <tr><td><code>addressed_by</code></td><td>Requirement</td><td>KPI</td><td>Links a requirement to the KPI that measures it.</td></tr>
+        <tr><td><code>has_stage</code></td><td>Journey</td><td>Stage</td><td>Links a journey to one of its ordered stages.</td></tr>
+        <tr><td><code>uses_feature</code></td><td>Stage</td><td>Feature</td><td>Links a stage to a feature it involves.</td></tr>
+        <tr><td><code>rolls_up_to</code></td><td>Stage</td><td>KPI</td><td>Links a stage's outcome to the KPI it contributes to.</td></tr>
+        <tr><td><code>contributes_to</code></td><td>KPI</td><td>KPI</td><td>Links a KPI to a higher-level KPI it rolls up into (KPI hierarchy).</td></tr>
+        <tr><td><code>maps_to</code></td><td>DataLayerVariable</td><td>Component</td><td>Links a raw implementation variable to the semantic component it populates.</td></tr>
+        <tr><td><code>refs</code></td><td>Component</td><td>rdfs:Resource</td><td>Points to the authoritative entity in AEP's own native knowledge graph (e.g. an XDM path URI). Reference only — never duplicated locally.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h3>Object properties — n-ary relation predicates</h3>
+    <table>
+      <thead><tr><th>Property</th><th>Domain</th><th>Range</th><th>Comment</th></tr></thead>
+      <tbody>
+        <tr><td><code>transition_from</code></td><td>StageTransition</td><td>Stage</td><td>The stage a transition starts from.</td></tr>
+        <tr><td><code>transition_to</code></td><td>StageTransition</td><td>Stage</td><td>The stage a transition leads to.</td></tr>
+        <tr><td><code>conversion_rate</code></td><td>StageTransition</td><td>xsd:decimal</td><td>Share of people from the origin stage who reached the destination stage.</td></tr>
+        <tr><td><code>measured_entity</code></td><td>Measurement</td><td>rdfs:Resource</td><td>The Stage or Feature being measured.</td></tr>
+        <tr><td><code>measured_component</code></td><td>Measurement</td><td>Component</td><td>The component used to measure the entity.</td></tr>
+        <tr><td><code>filter_value</code></td><td>Measurement</td><td>xsd:string</td><td>Optional. The specific dimension value that identifies this measurement (e.g. a page-name value for a shared page-name component).</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h3>Datatype properties (business-meaning / descriptive attributes)</h3>
+    <table>
+      <thead><tr><th>Property</th><th>Domain</th><th>Range</th><th>Comment</th></tr></thead>
+      <tbody>
+        <tr><td><code>status</code></td><td>Requirement</td><td>xsd:string</td><td>Lifecycle status of a requirement, e.g. active, answered, retired.</td></tr>
+        <tr><td><code>formula</code></td><td>KPI</td><td>xsd:string</td><td>The formula or definition of a KPI.</td></tr>
+        <tr><td><code>target</code></td><td>KPI</td><td>xsd:decimal</td><td>The target or benchmark value for a KPI.</td></tr>
+        <tr><td><code>order</code></td><td>Stage</td><td>xsd:integer</td><td>Position of the stage within its journey.</td></tr>
+        <tr><td><code>entry_criteria</code></td><td>Stage</td><td>xsd:string</td><td>What defines that a user has entered this stage.</td></tr>
+        <tr><td><code>definition</code></td><td>Component</td><td>xsd:string</td><td>Plain-language business meaning of the component. Curated here — not present in AEP's own graph.</td></tr>
+        <tr><td><code>caveats</code></td><td>Component</td><td>xsd:string</td><td>Known data-quality issues, gaps, or limitations of the component.</td></tr>
+        <tr><td><code>context</code></td><td>Component</td><td>xsd:string</td><td>Business or industry context explaining why the component matters.</td></tr>
+        <tr><td><code>component_type</code></td><td>Component</td><td>xsd:string</td><td>Whether the component is a metric or a dimension.</td></tr>
+        <tr><td><code>source_system</code></td><td>DataLayerVariable</td><td>xsd:string</td><td>Where the raw variable is implemented, e.g. the tagging/data layer system.</td></tr>
+        <tr><td><code>owner</code></td><td><em>(none)</em></td><td>xsd:string</td><td>Person or team responsible. Reused across Requirement, KPI, Journey, Component, and Feature — intentionally left without a fixed domain.</td></tr>
+      </tbody>
+    </table>
+    <p class="note"><code>owner</code> deliberately has no fixed <code>rdfs:domain</code> — it's the one property meant to be reused across several classes rather than scoped to one.</p>
+  </section>
+
+  <section>
+    <p><a href="data-files.html">See it in the raw files →</a> &nbsp;·&nbsp; <a href="query.html">Query it live →</a></p>
+  </section>
+</main>
+<footer class="site-footer">Static UI shell — no backend, no JavaScript.</footer>
+</body>
+</html>

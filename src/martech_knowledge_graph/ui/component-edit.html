@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Edit Component — Martech Knowledge Graph</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="site-header">
+  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+</header>
+<nav class="site-nav">
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="ontology.html">Ontology</a></li>
+    <li><a href="components.html">Components</a></li>
+    <li><a href="journeys.html">Journeys</a></li>
+    <li><a href="graph.html">Graph</a></li>
+    <li><a href="query.html">Query</a></li>
+    <li><a href="data-files.html">Data Files</a></li>
+    <li><a href="mcp.html">MCP</a></li>
+  </ul>
+</nav>
+<main>
+  <section>
+    <h2 id="page-title">Edit Component: Product views</h2>
+    <p><a href="components.html">&larr; Back to components</a></p>
+    <p class="note" id="live-mode-note">Checking for a local API…</p>
+
+    <div class="readonly-block">
+      <h3>From CJA (read-only)</h3>
+      <dl>
+        <dt>Name</dt><dd id="ro-name">Product views</dd>
+        <dt>CJA Component ID</dt><dd id="ro-cja-id">cja:metrics/productViews</dd>
+        <!-- no ontology counterpart: CJA-side identifier only, not persisted as a triple -->
+        <dt>Type</dt><dd id="ro-type">metric</dd>
+        <dt>Data view</dt><dd id="ro-dataview">Production - Website</dd>
+        <!-- no ontology counterpart: not present anywhere in martech-ontology.ttl; always a placeholder, live or not -->
+        <dt>CJA description</dt><dd id="ro-description">Count of product detail page view events, as defined in the CJA semantic layer.</dd>
+        <!-- no ontology counterpart: distinct from the curated "definition" field below; shown for reference only, never written to the graph -->
+      </dl>
+      <!-- WIRE: refresh this read-only block from the CJA semantic layer | reuses: CJA Semantic Layer MCP -->
+    </div>
+
+    <form id="form-component-context" class="field-form" action="#" method="post">
+      <label for="field-definition">Definition (martech:definition)</label>
+      <textarea id="field-definition" name="definition" rows="2">Number of times a product detail page was viewed.</textarea>
+
+      <label for="field-caveats">Caveats (martech:caveats)</label>
+      <textarea id="field-caveats" name="caveats" rows="2">Counts page views, not unique visitors — a visitor viewing the same product twice counts twice.</textarea>
+
+      <label for="field-context">Context (martech:context)</label>
+      <textarea id="field-context" name="context" rows="2">Entry point for the purchase funnel; used to benchmark top-of-funnel demand.</textarea>
+
+      <label for="field-owner">Owner (martech:owner)</label>
+      <input type="text" id="field-owner" name="owner" value="Digital Analytics">
+
+      <h3>References to Adobe's native graph (martech:refs)</h3>
+      <p class="note">Pointers only — the identity of a component stays authoritative in AEP. Never duplicate that content here.</p>
+      <table id="table-refs">
+        <thead>
+          <tr><th>Label</th><th>Identifier / URL</th></tr>
+        </thead>
+        <tbody id="refs-tbody">
+          <tr data-ref-index="0">
+            <td><input type="text" name="refs_label" value="AEP XDM field"></td>
+            <td><input type="text" name="refs" value="https://sandbox/champion/xdm/commerce.productViews.value"></td>
+          </tr>
+          <tr data-ref-index="1">
+            <td><input type="text" name="refs_label" value="CJA component definition"></td>
+            <td><input type="text" name="refs" value="https://experience.adobe.com/cja/#/components/metrics/productViews"></td>
+          </tr>
+        </tbody>
+      </table>
+      <button type="button" id="btn-add-ref" class="secondary">Add reference row</button>
+
+      <p>
+        <button type="button" id="btn-save-component">Save</button>
+        <span id="save-status" class="note" style="display:none;"></span>
+      </p>
+    </form>
+  </section>
+
+  <section>
+    <h3>Generated turtle preview</h3>
+    <div class="panel">
+      <pre class="code-block" id="turtle-preview">
+@prefix martech: &lt;https://example.org/martech/ontology/&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+martech:component_product_views
+  a martech:Component ;
+  rdfs:label "Product views" ;
+  martech:component_type "metric" ;
+  martech:definition "Number of times a product detail page was viewed." ;
+  martech:caveats "Counts page views, not unique visitors — a visitor viewing the same product twice counts twice." ;
+  martech:context "Entry point for the purchase funnel; used to benchmark top-of-funnel demand." ;
+  martech:owner "Digital Analytics" ;
+  martech:refs &lt;https://sandbox/champion/xdm/commerce.productViews.value&gt; .
+      </pre>
+    </div>
+    <p class="note">This preview is regenerated from the server's response after Save — it's the actual turtle now on disk for this component, not a static example, whenever the local API is reachable.</p>
+  </section>
+</main>
+<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running — see components.html for setup. Falls back to a static example otherwise.</footer>
+
+<script>
+const params = new URLSearchParams(location.search);
+const componentKey = params.get("id");
+
+function addRefRow(label, url) {
+  const tbody = document.getElementById("refs-tbody");
+  const tr = document.createElement("tr");
+  tr.dataset.refIndex = String(tbody.children.length);
+  tr.innerHTML =
+    '<td><input type="text" name="refs_label" value="' + (label || "") + '"></td>' +
+    '<td><input type="text" name="refs" value="' + (url || "") + '"></td>';
+  tbody.appendChild(tr);
+}
+
+document.getElementById("btn-add-ref").addEventListener("click", () => addRefRow("", ""));
+// WIRE: (implemented above) repeatable refs row is real, client-side only | reuses: none
+
+document.getElementById("form-component-context").addEventListener("submit", ev => ev.preventDefault());
+
+if (componentKey) {
+  fetch("/api/components/" + encodeURIComponent(componentKey))
+    .then(r => { if (!r.ok) throw new Error("component not found"); return r.json(); })
+    .then(data => {
+      document.getElementById("live-mode-note").textContent =
+        "Live data (source file: " + data.source_file + ").";
+      document.getElementById("page-title").textContent = "Edit Component: " + data.name;
+      document.getElementById("ro-name").textContent = data.name;
+      document.getElementById("ro-cja-id").textContent = data.cja_id;
+      document.getElementById("ro-type").textContent = data.type;
+      document.getElementById("field-definition").value = data.definition;
+      document.getElementById("field-caveats").value = data.caveats;
+      document.getElementById("field-context").value = data.context;
+      document.getElementById("field-owner").value = data.owner;
+
+      document.getElementById("refs-tbody").innerHTML = "";
+      if (data.refs.length === 0) addRefRow("", "");
+      data.refs.forEach(url => addRefRow("Reference", url));
+    })
+    .catch(() => {
+      document.getElementById("live-mode-note").textContent =
+        "Could not load component '" + componentKey + "' from the local API — showing the static example instead.";
+    });
+} else {
+  document.getElementById("live-mode-note").textContent =
+    "No component selected (open this page via a table's Edit link) — showing the static example.";
+}
+
+document.getElementById("btn-save-component").addEventListener("click", () => {
+  const statusEl = document.getElementById("save-status");
+  if (!componentKey) {
+    statusEl.textContent = "No component selected — open this page via components.html's Edit link.";
+    statusEl.style.display = "inline";
+    return;
+  }
+
+  const refs = Array.from(document.querySelectorAll('#refs-tbody tr')).map(tr => ({
+    label: tr.querySelector('input[name="refs_label"]').value,
+    url: tr.querySelector('input[name="refs"]').value,
+  }));
+  const body = {
+    definition: document.getElementById("field-definition").value,
+    caveats: document.getElementById("field-caveats").value,
+    context: document.getElementById("field-context").value,
+    owner: document.getElementById("field-owner").value,
+    refs: refs,
+  };
+
+  statusEl.textContent = "Saving…";
+  statusEl.style.display = "inline";
+
+  fetch("/api/components/" + encodeURIComponent(componentKey) + "/context", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (!ok) throw new Error(data.error || "save failed");
+      statusEl.textContent = "Saved — written to disk.";
+      document.getElementById("turtle-preview").textContent = data.turtle;
+    })
+    .catch(err => {
+      statusEl.textContent = "Could not reach the local API (" + err.message + ") — run `martech-knowledge-graph serve` to save for real.";
+    });
+});
+</script>
+</body>
+</html>

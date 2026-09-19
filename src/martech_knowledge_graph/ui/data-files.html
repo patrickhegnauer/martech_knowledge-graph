@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Data Files — Martech Knowledge Graph</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="site-header">
+  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+</header>
+<nav class="site-nav">
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="ontology.html">Ontology</a></li>
+    <li><a href="components.html">Components</a></li>
+    <li><a href="journeys.html">Journeys</a></li>
+    <li><a href="graph.html">Graph</a></li>
+    <li><a href="query.html">Query</a></li>
+    <li class="active"><a href="data-files.html">Data Files</a></li>
+    <li><a href="mcp.html">MCP</a></li>
+  </ul>
+</nav>
+<main>
+  <section>
+    <h2>Data files</h2>
+    <p>Flat <code>.ttl</code> files remain the storage layer — no graph database (locked decision).</p>
+
+    <table id="table-data-files">
+      <thead>
+        <tr><th>File</th><th>Role</th><th>Size</th><th>Last modified</th></tr>
+      </thead>
+      <tbody>
+        <tr data-file-name="martech-ontology.ttl">
+          <td>martech-ontology.ttl</td>
+          <td>Ontology (classes + properties, schema only)</td>
+          <td>6.4 KB</td>
+          <td>2026-08-01</td>
+        </tr>
+        <tr data-file-name="ecommerce-funnel-instances.ttl">
+          <td>ecommerce-funnel-instances.ttl</td>
+          <td>Instance data — ecommerce purchase journey</td>
+          <td>3.1 KB</td>
+          <td>2026-08-14</td>
+        </tr>
+        <tr data-file-name="login-journey-instances.ttl">
+          <td>login-journey-instances.ttl</td>
+          <td>Instance data — customer login journey</td>
+          <td>1.8 KB</td>
+          <td>2026-08-14</td>
+        </tr>
+      </tbody>
+    </table>
+    <!-- WIRE: list actual files on disk with real size/mtime | reuses: graph_explorer.py load_graph() auto-discovery of *-instances.ttl -->
+  </section>
+
+  <section>
+    <h2>File excerpt: martech-ontology.ttl</h2>
+    <div class="panel">
+      <pre class="code-block" id="file-viewer">martech:Component a rdfs:Class ;
+    rdfs:comment "A metric or dimension from the semantic layer (CJA Semantic Layer MCP). Identity is authoritative in AEP; business meaning (definition, caveats, context) is curated here." .
+
+martech:definition a rdf:Property ;
+    rdfs:domain martech:Component ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Plain-language business meaning of the component." .
+
+martech:caveats a rdf:Property ;
+    rdfs:domain martech:Component ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Known data-quality issues, gaps, or limitations." .
+
+martech:owner a rdf:Property ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Person or team responsible. Reused across Requirement, KPI, Journey, Component, and Feature — intentionally left without a fixed domain." .</pre>
+    </div>
+    <!-- WIRE: load a real excerpt (or full file) of the selected data file, read-only | reuses: martech-ontology.ttl / *-instances.ttl on disk -->
+  </section>
+</main>
+<footer class="site-footer">Static UI shell — no backend, no JavaScript.</footer>
+</body>
+</html>

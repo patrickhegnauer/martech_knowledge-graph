@@ -1,0 +1,182 @@
+# ==========================================================================
+# Unified martech knowledge graph — ontology (v1, schema only, no instance data)
+# Namespace: martech  (placeholder base URI — swap for your real one)
+# Style: RDFS-level only (no OWL reasoning/constraints, intentionally)
+# ==========================================================================
+
+@prefix martech: <https://example.org/martech/ontology/> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+
+# --------------------------------------------------------------------------
+# Core classes
+# --------------------------------------------------------------------------
+
+martech:Requirement a rdfs:Class ;
+    rdfs:comment "The business problem, question, or hypothesis that justifies tracking something." .
+
+martech:KPI a rdfs:Class ;
+    rdfs:comment "A measurable objective that addresses a requirement." .
+
+martech:Journey a rdfs:Class ;
+    rdfs:comment "A named, end-to-end customer path." .
+
+martech:Stage a rdfs:Class ;
+    rdfs:comment "An ordered step within a journey." .
+
+martech:Feature a rdfs:Class ;
+    rdfs:comment "A reusable functional capability of the product. Not sequential; can be used by multiple stages or journeys." .
+
+martech:Component a rdfs:Class ;
+    rdfs:comment "A metric or dimension from the semantic layer (CJA Semantic Layer MCP). Identity is authoritative in AEP; business meaning (definition, caveats, context) is curated here." .
+
+martech:DataLayerVariable a rdfs:Class ;
+    rdfs:comment "The raw implementation artifact (e.g. a data layer field) that populates a component." .
+
+# --------------------------------------------------------------------------
+# N-ary relation classes
+#
+# Used where a relationship itself needs an attribute (e.g. a conversion
+# rate, or a filter value). A plain RDF predicate can only connect two
+# resources with no attribute of its own, so these relationships are
+# modeled as their own nodes instead of plain triples.
+# Pattern reference: https://www.w3.org/TR/swbp-n-aryRelations/
+# --------------------------------------------------------------------------
+
+martech:StageTransition a rdfs:Class ;
+    rdfs:comment "An empirical transition between two stages (CJA-sourced), carrying a conversion rate. Stands in for a plain 'next' predicate because the relationship itself has an attribute." .
+
+martech:Measurement a rdfs:Class ;
+    rdfs:comment "A 'measured_by' relationship between a Stage or Feature and a Component, optionally qualified by a filter value (e.g. a specific page-name value that identifies the stage)." .
+
+# --------------------------------------------------------------------------
+# Direct predicates (no attributes of their own)
+# --------------------------------------------------------------------------
+
+martech:addressed_by a rdf:Property ;
+    rdfs:domain martech:Requirement ;
+    rdfs:range martech:KPI ;
+    rdfs:comment "Links a requirement to the KPI that measures it." .
+
+martech:has_stage a rdf:Property ;
+    rdfs:domain martech:Journey ;
+    rdfs:range martech:Stage ;
+    rdfs:comment "Links a journey to one of its ordered stages." .
+
+martech:uses_feature a rdf:Property ;
+    rdfs:domain martech:Stage ;
+    rdfs:range martech:Feature ;
+    rdfs:comment "Links a stage to a feature it involves." .
+
+martech:rolls_up_to a rdf:Property ;
+    rdfs:domain martech:Stage ;
+    rdfs:range martech:KPI ;
+    rdfs:comment "Links a stage's outcome to the KPI it contributes to." .
+
+martech:contributes_to a rdf:Property ;
+    rdfs:domain martech:KPI ;
+    rdfs:range martech:KPI ;
+    rdfs:comment "Links a KPI to a higher-level KPI it rolls up into (KPI hierarchy)." .
+
+martech:maps_to a rdf:Property ;
+    rdfs:domain martech:DataLayerVariable ;
+    rdfs:range martech:Component ;
+    rdfs:comment "Links a raw implementation variable to the semantic component it populates." .
+
+martech:refs a rdf:Property ;
+    rdfs:domain martech:Component ;
+    rdfs:range rdfs:Resource ;
+    rdfs:comment "Points to the authoritative entity in AEP's own native knowledge graph (e.g. an XDM path URI). Reference only — never duplicated locally." .
+
+# --------------------------------------------------------------------------
+# N-ary relation predicates
+# --------------------------------------------------------------------------
+
+martech:transition_from a rdf:Property ;
+    rdfs:domain martech:StageTransition ;
+    rdfs:range martech:Stage ;
+    rdfs:comment "The stage a transition starts from." .
+
+martech:transition_to a rdf:Property ;
+    rdfs:domain martech:StageTransition ;
+    rdfs:range martech:Stage ;
+    rdfs:comment "The stage a transition leads to." .
+
+martech:conversion_rate a rdf:Property ;
+    rdfs:domain martech:StageTransition ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "Share of people from the origin stage who reached the destination stage." .
+
+martech:measured_entity a rdf:Property ;
+    rdfs:domain martech:Measurement ;
+    rdfs:range rdfs:Resource ;
+    rdfs:comment "The Stage or Feature being measured." .
+
+martech:measured_component a rdf:Property ;
+    rdfs:domain martech:Measurement ;
+    rdfs:range martech:Component ;
+    rdfs:comment "The component used to measure the entity." .
+
+martech:filter_value a rdf:Property ;
+    rdfs:domain martech:Measurement ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Optional. The specific dimension value that identifies this measurement (e.g. a page-name value for a shared page-name component)." .
+
+# --------------------------------------------------------------------------
+# Datatype properties (business-meaning / descriptive attributes)
+# --------------------------------------------------------------------------
+
+martech:status a rdf:Property ;
+    rdfs:domain martech:Requirement ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Lifecycle status of a requirement, e.g. active, answered, retired." .
+
+martech:formula a rdf:Property ;
+    rdfs:domain martech:KPI ;
+    rdfs:range xsd:string ;
+    rdfs:comment "The formula or definition of a KPI." .
+
+martech:target a rdf:Property ;
+    rdfs:domain martech:KPI ;
+    rdfs:range xsd:decimal ;
+    rdfs:comment "The target or benchmark value for a KPI." .
+
+martech:order a rdf:Property ;
+    rdfs:domain martech:Stage ;
+    rdfs:range xsd:integer ;
+    rdfs:comment "Position of the stage within its journey." .
+
+martech:entry_criteria a rdf:Property ;
+    rdfs:domain martech:Stage ;
+    rdfs:range xsd:string ;
+    rdfs:comment "What defines that a user has entered this stage." .
+
+martech:definition a rdf:Property ;
+    rdfs:domain martech:Component ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Plain-language business meaning of the component. Curated here — not present in AEP's own graph." .
+
+martech:caveats a rdf:Property ;
+    rdfs:domain martech:Component ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Known data-quality issues, gaps, or limitations of the component." .
+
+martech:context a rdf:Property ;
+    rdfs:domain martech:Component ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Business or industry context explaining why the component matters." .
+
+martech:component_type a rdf:Property ;
+    rdfs:domain martech:Component ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Whether the component is a metric or a dimension." .
+
+martech:source_system a rdf:Property ;
+    rdfs:domain martech:DataLayerVariable ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Where the raw variable is implemented, e.g. the tagging/data layer system." .
+
+martech:owner a rdf:Property ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Person or team responsible. Reused across Requirement, KPI, Journey, Component, and Feature — intentionally left without a fixed domain." .

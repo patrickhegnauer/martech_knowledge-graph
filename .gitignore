@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# A user's own data directory (default name from `martech-knowledge-graph serve`)
+martech-knowledge-graph-data/
+
+# graph_explorer.py's standalone output, written to the cwd
+graph.dot
+graph.png
+explorer.html
+graph_network.html
+node_modules/
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

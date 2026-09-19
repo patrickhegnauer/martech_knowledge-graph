@@ -1,0 +1,103 @@
+@prefix data: <https://example.org/martech/data/ecommerce/> .
+@prefix martech: <https://example.org/martech/ontology/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+data:dlv_conversion_funnel_step a martech:DataLayerVariable ;
+    rdfs:label "digitalData.conversion.conversionFunnel.step" ;
+    martech:maps_to data:component_checkouts,
+        data:component_orders,
+        data:component_product_list_adds,
+        data:component_product_views ;
+    martech:source_system "Web data layer (digitalData)" .
+
+data:journey_ecommerce_funnel a martech:Journey ;
+    rdfs:label "Ecommerce purchase journey" ;
+    martech:has_stage data:stage_cart_add,
+        data:stage_checkout,
+        data:stage_order,
+        data:stage_product_view ;
+    martech:owner "Digital Marketing" .
+
+data:measurement_cart_add a martech:Measurement ;
+    martech:measured_component data:component_product_list_adds ;
+    martech:measured_entity data:stage_cart_add .
+
+data:measurement_checkout a martech:Measurement ;
+    martech:measured_component data:component_checkouts ;
+    martech:measured_entity data:stage_checkout .
+
+data:measurement_order a martech:Measurement ;
+    martech:measured_component data:component_orders ;
+    martech:measured_entity data:stage_order .
+
+data:measurement_product_view a martech:Measurement ;
+    martech:measured_component data:component_product_views ;
+    martech:measured_entity data:stage_product_view .
+
+data:req_shop_performance a martech:Requirement ;
+    rdfs:label "Understand shop performance and drop-off" ;
+    rdfs:comment "We want to understand how our shop is performing, and where in the journey people drop off." ;
+    martech:addressed_by data:kpi_order_conversion_rate ;
+    martech:status "active" .
+
+data:component_checkouts a martech:Component ;
+    rdfs:label "Checkouts" ;
+    martech:caveats "Counts checkout starts, not completions — a user can start checkout multiple times without purchasing." ;
+    martech:component_type "metric" ;
+    martech:context "Marks the transition from browsing to transactional intent." ;
+    martech:definition "Number of times a user started the checkout process!" ;
+    martech:owner "Digital Analytics" ;
+    martech:refs <https://sandbox/SANDBOX_NAME/xdm/commerce.checkouts.value> .
+
+data:component_orders a martech:Component ;
+    rdfs:label "Orders" ;
+    martech:caveats "Includes orders later cancelled or refunded — not net of returns." ;
+    martech:component_type "metric" ;
+    martech:context "The funnel's terminal event and the numerator of the order conversion rate KPI." ;
+    martech:definition "Number of completed purchase orders." ;
+    martech:owner "Digital Analytics" ;
+    martech:refs <https://sandbox/SANDBOX_NAME/xdm/orders> .
+
+data:component_product_list_adds a martech:Component ;
+    rdfs:label "Product list adds" ;
+    martech:caveats "Does not deduplicate repeated adds of the same product within one session." ;
+    martech:component_type "metric" ;
+    martech:context "First explicit purchase-intent signal in the funnel." ;
+    martech:definition "Number of times a product was added to the cart." ;
+    martech:owner "Digital Analytics" ;
+    martech:refs <https://sandbox/SANDBOX_NAME/xdm/commerce.productListAdds.value> .
+
+data:component_product_views a martech:Component ;
+    rdfs:label "Product views" ;
+    martech:caveats "Counts page views, not unique visitors — a visitor viewing the same product twice counts twice." ;
+    martech:component_type "metric" ;
+    martech:context "Entry point for the purchase funnel; used to benchmark top-of-funnel demand." ;
+    martech:definition "Number of times a product detail page was viewed." ;
+    martech:owner "Digital Analytics" ;
+    martech:refs <https://sandbox/SANDBOX_NAME/xdm/commerce.productViews.value> .
+
+data:kpi_order_conversion_rate a martech:KPI ;
+    rdfs:label "Order conversion rate" ;
+    rdfs:comment "Current value (2026): 0.11%. Target: 0.20% (illustrative example, not a real commitment)." ;
+    martech:formula "Orders / Product Views" ;
+    martech:owner "Ecommerce / Digital Marketing" ;
+    martech:target 0.0020 .
+
+data:stage_cart_add a martech:Stage ;
+    rdfs:label "Cart add" ;
+    martech:order 2 .
+
+data:stage_checkout a martech:Stage ;
+    rdfs:label "Checkout" ;
+    martech:order 3 .
+
+data:stage_order a martech:Stage ;
+    rdfs:label "Order" ;
+    martech:order 4 ;
+    martech:rolls_up_to data:kpi_order_conversion_rate .
+
+data:stage_product_view a martech:Stage ;
+    rdfs:label "Product view" ;
+    martech:order 1 .
+
