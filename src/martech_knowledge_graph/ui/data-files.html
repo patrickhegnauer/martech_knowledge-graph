@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Data Files — Martech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -26,31 +27,37 @@
     <h2>Data files</h2>
     <p>Flat <code>.ttl</code> files remain the storage layer — no graph database (locked decision).</p>
 
-    <table id="table-data-files">
-      <thead>
-        <tr><th>File</th><th>Role</th><th>Size</th><th>Last modified</th></tr>
-      </thead>
-      <tbody>
-        <tr data-file-name="martech-ontology.ttl">
-          <td>martech-ontology.ttl</td>
-          <td>Ontology (classes + properties, schema only)</td>
-          <td>6.4 KB</td>
-          <td>2026-08-01</td>
-        </tr>
-        <tr data-file-name="ecommerce-funnel-instances.ttl">
-          <td>ecommerce-funnel-instances.ttl</td>
-          <td>Instance data — ecommerce purchase journey</td>
-          <td>3.1 KB</td>
-          <td>2026-08-14</td>
-        </tr>
-        <tr data-file-name="login-journey-instances.ttl">
-          <td>login-journey-instances.ttl</td>
-          <td>Instance data — customer login journey</td>
-          <td>1.8 KB</td>
-          <td>2026-08-14</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="table-scroll">
+
+
+      <table id="table-data-files">
+        <thead>
+          <tr><th>File</th><th>Role</th><th>Size</th><th>Last modified</th></tr>
+        </thead>
+        <tbody>
+          <tr data-file-name="martech-ontology.ttl">
+            <td>martech-ontology.ttl</td>
+            <td>Ontology (classes + properties, schema only)</td>
+            <td>6.4 KB</td>
+            <td>2026-08-01</td>
+          </tr>
+          <tr data-file-name="ecommerce-funnel-instances.ttl">
+            <td>ecommerce-funnel-instances.ttl</td>
+            <td>Instance data — ecommerce purchase journey</td>
+            <td>3.1 KB</td>
+            <td>2026-08-14</td>
+          </tr>
+          <tr data-file-name="login-journey-instances.ttl">
+            <td>login-journey-instances.ttl</td>
+            <td>Instance data — customer login journey</td>
+            <td>1.8 KB</td>
+            <td>2026-08-14</td>
+          </tr>
+        </tbody>
+      </table>
+
+
+    </div>
     <!-- WIRE: list actual files on disk with real size/mtime | reuses: graph_explorer.py load_graph() auto-discovery of *-instances.ttl -->
   </section>
 
@@ -77,6 +84,7 @@ martech:owner a rdf:Property ;
     <!-- WIRE: load a real excerpt (or full file) of the selected data file, read-only | reuses: martech-ontology.ttl / *-instances.ttl on disk -->
   </section>
 </main>
-<footer class="site-footer">Static UI shell — no backend, no JavaScript.</footer>
+<footer class="site-footer">Static content — the only script on this page is the shared demo/org mode banner (js/mode-banner.js).</footer>
+<script src="js/mode-banner.js"></script>
 </body>
 </html>

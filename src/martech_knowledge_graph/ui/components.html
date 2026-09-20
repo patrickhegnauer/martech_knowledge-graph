@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Components — Martech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -49,60 +50,66 @@
       <!-- WIRE: filter table rows by context status / component_type | reuses: martech-ontology.ttl component_type, definition/caveats/context/owner presence -->
     </div>
 
-    <table id="table-components">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>CJA Component ID</th>
-          <th>Owner</th>
-          <th>Context status</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr data-component-id="product_views">
-          <td>Product views</td>
-          <td>metric</td>
-          <td>cja:metrics/productViews</td>
-          <td>Digital Analytics</td>
-          <td><span class="badge badge-has-context">Has context</span></td>
-          <td><a href="component-edit.html?id=product_views">Edit</a></td>
-        </tr>
-        <tr data-component-id="product_list_adds">
-          <td>Product list adds</td>
-          <td>metric</td>
-          <td>cja:metrics/productListAdds</td>
-          <td>Digital Analytics</td>
-          <td><span class="badge badge-has-context">Has context</span></td>
-          <td><a href="component-edit.html?id=product_list_adds">Edit</a></td>
-        </tr>
-        <tr data-component-id="checkouts">
-          <td>Checkouts</td>
-          <td>metric</td>
-          <td>cja:metrics/checkouts</td>
-          <td>Digital Analytics</td>
-          <td><span class="badge badge-has-context">Has context</span></td>
-          <td><a href="component-edit.html?id=checkouts">Edit</a></td>
-        </tr>
-        <tr data-component-id="orders">
-          <td>Orders</td>
-          <td>metric</td>
-          <td>cja:metrics/orders</td>
-          <td>Digital Analytics</td>
-          <td><span class="badge badge-missing-context">Missing context</span></td>
-          <td><a href="component-edit.html?id=orders">Edit</a></td>
-        </tr>
-        <tr data-component-id="page_name">
-          <td>Page name</td>
-          <td>dimension</td>
-          <td>cja:dimensions/pageName</td>
-          <td>Digital Analytics</td>
-          <td><span class="badge badge-missing-context">Missing context</span></td>
-          <td><a href="component-edit.html?id=page_name">Edit</a></td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="table-scroll">
+
+
+      <table id="table-components">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>CJA Component ID</th>
+            <th>Owner</th>
+            <th>Context status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-component-id="product_views">
+            <td>Product views</td>
+            <td>metric</td>
+            <td>cja:metrics/productViews</td>
+            <td>Digital Analytics</td>
+            <td><span class="badge badge-has-context">Has context</span></td>
+            <td><a href="component-edit.html?id=product_views">Edit</a></td>
+          </tr>
+          <tr data-component-id="product_list_adds">
+            <td>Product list adds</td>
+            <td>metric</td>
+            <td>cja:metrics/productListAdds</td>
+            <td>Digital Analytics</td>
+            <td><span class="badge badge-has-context">Has context</span></td>
+            <td><a href="component-edit.html?id=product_list_adds">Edit</a></td>
+          </tr>
+          <tr data-component-id="checkouts">
+            <td>Checkouts</td>
+            <td>metric</td>
+            <td>cja:metrics/checkouts</td>
+            <td>Digital Analytics</td>
+            <td><span class="badge badge-has-context">Has context</span></td>
+            <td><a href="component-edit.html?id=checkouts">Edit</a></td>
+          </tr>
+          <tr data-component-id="orders">
+            <td>Orders</td>
+            <td>metric</td>
+            <td>cja:metrics/orders</td>
+            <td>Digital Analytics</td>
+            <td><span class="badge badge-missing-context">Missing context</span></td>
+            <td><a href="component-edit.html?id=orders">Edit</a></td>
+          </tr>
+          <tr data-component-id="page_name">
+            <td>Page name</td>
+            <td>dimension</td>
+            <td>cja:dimensions/pageName</td>
+            <td>Digital Analytics</td>
+            <td><span class="badge badge-missing-context">Missing context</span></td>
+            <td><a href="component-edit.html?id=page_name">Edit</a></td>
+          </tr>
+        </tbody>
+      </table>
+
+
+    </div>
   </section>
 </main>
 
@@ -132,7 +139,7 @@
           <label><input type="checkbox" name="cja-scope" value="cja:segments.read"> cja:segments.read</label>
         </div>
 
-        <p class="note" id="cja-config-error" style="display:none; background:#fbe4e1; border-left-color:#c0392b;"></p>
+        <p class="note note-error" id="cja-config-error" style="display:none;"></p>
 
         <p>
           <button type="button" id="btn-cja-connect">Save &amp; Connect</button>
@@ -336,5 +343,6 @@ document.getElementById("btn-cja-sync").addEventListener("click", () => {
 refreshToolbarStatus();
 loadLiveState();
 </script>
+<script src="js/mode-banner.js"></script>
 </body>
 </html>

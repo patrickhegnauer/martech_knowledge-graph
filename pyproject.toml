@@ -26,5 +26,6 @@ martech_knowledge_graph = [
     "ui/*.html",
     "ui/*.md",
     "ui/css/*.css",
+    "ui/js/*.js",
     "ui/vendor/*",
 ]

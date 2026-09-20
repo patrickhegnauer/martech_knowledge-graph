@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MCP — Martech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -27,21 +28,25 @@
 
     <h2>Planned tool set</h2>
     <p>Single-doorway principle: one query interface, not multiple competing tools.</p>
-    <table>
-      <thead>
-        <tr><th>Tool</th><th>Purpose</th></tr>
-      </thead>
-      <tbody>
-        <tr data-tool-name="run_sparql">
-          <td><code>run_sparql</code></td>
-          <td>Execute a SPARQL query against the flat .ttl files and return results.</td>
-        </tr>
-        <tr data-tool-name="get_ontology_schema">
-          <td><code>get_ontology_schema</code></td>
-          <td>Documentation/ontology tool — returns the classes and properties available to query against.</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="table-scroll">
+
+      <table>
+        <thead>
+          <tr><th>Tool</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr data-tool-name="run_sparql">
+            <td><code>run_sparql</code></td>
+            <td>Execute a SPARQL query against the flat .ttl files and return results.</td>
+          </tr>
+          <tr data-tool-name="get_ontology_schema">
+            <td><code>get_ontology_schema</code></td>
+            <td>Documentation/ontology tool — returns the classes and properties available to query against.</td>
+          </tr>
+        </tbody>
+      </table>
+
+    </div>
     <!-- WIRE: expose these two tools over MCP | reuses: run_sparql pattern (conceptual, from platform-mvp-handoff.md), martech-ontology.ttl -->
 
     <h2>Endpoint</h2>
@@ -52,6 +57,7 @@
     <!-- WIRE: show live endpoint URL and deployment status once the MCP exists | reuses: future MCP server -->
   </section>
 </main>
-<footer class="site-footer">Static UI shell — no backend, no JavaScript.</footer>
+<footer class="site-footer">Static content — the only script on this page is the shared demo/org mode banner (js/mode-banner.js).</footer>
+<script src="js/mode-banner.js"></script>
 </body>
 </html>

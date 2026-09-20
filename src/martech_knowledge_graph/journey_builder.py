@@ -14,6 +14,11 @@ from dataclasses import dataclass, field
 
 ONTOLOGY_NS = "https://example.org/martech/ontology/"
 
+# Prefix for generated Component refs (Component.xdm_path gets appended to this).
+# Org-specific -- overridable per call; server.py's /api/journeys/generate reads
+# the persisted per-workspace setting (.mkg-settings.json) and passes it through.
+DEFAULT_XDM_BASE_URL = "https://sandbox/SANDBOX_NAME/xdm/"
+
 
 @dataclass
 class ComponentSpec:
@@ -60,7 +65,7 @@ def _esc(s):
     return s.replace('"', "'")
 
 
-def build_journey_turtle(spec: JourneySpec) -> str:
+def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE_URL) -> str:
     data_ns = f"https://example.org/martech/data/{spec.slug}/"
     lines = [
         f"# ==========================================================================",
@@ -148,7 +153,7 @@ def build_journey_turtle(spec: JourneySpec) -> str:
             f'    martech:caveats "{_esc(c.caveats)}" ;',
             f'    martech:context "{_esc(c.context)}" ;',
             f'    martech:owner "{_esc(c.owner)}" ;',
-            f"    martech:refs <https://sandbox/SANDBOX_NAME/xdm/{c.xdm_path}> .",
+            f"    martech:refs <{xdm_base_url}{c.xdm_path}> .",
             "",
         ]
 
@@ -196,7 +201,7 @@ def build_journey_turtle(spec: JourneySpec) -> str:
 import csv
 
 
-def build_journey_from_csv(csv_path: str) -> str:
+def build_journey_from_csv(csv_path: str, xdm_base_url: str = DEFAULT_XDM_BASE_URL) -> str:
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     if not rows:
@@ -254,7 +259,7 @@ def build_journey_from_csv(csv_path: str) -> str:
         data_layer_variable=first.get("data_layer_variable", "").strip() or None,
         data_layer_source_system=first.get("data_layer_source_system", "").strip() or "Web data layer (digitalData)",
     )
-    return build_journey_turtle(spec)
+    return build_journey_turtle(spec, xdm_base_url=xdm_base_url)
 
 
 CSV_COLUMNS = [

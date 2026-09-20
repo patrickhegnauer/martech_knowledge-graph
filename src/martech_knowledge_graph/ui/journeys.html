@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Journeys — Martech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -27,33 +28,53 @@
     <p class="note">Journeys stay CSV-based — see platform-mvp-handoff.md. A Journey is compound (requirement + KPI + several stages + measurements), so it is authored as a spreadsheet/CSV via <code>journey_builder.py</code> rather than a form. No wizard is planned unless the CSV path proves insufficient in practice.</p>
     <p class="note" id="live-mode-note">Checking for a local API…</p>
 
-    <table id="table-journeys">
-      <thead>
-        <tr>
-          <th>Journey</th>
-          <th>Requirement</th>
-          <th>Stages</th>
-          <th>KPIs</th>
-          <th>Last generated</th>
-        </tr>
-      </thead>
-      <tbody id="journeys-tbody">
-        <tr data-journey-slug="ecommerce">
-          <td>Ecommerce purchase journey</td>
-          <td>Understand shop performance and drop-off</td>
-          <td>4</td>
-          <td>1</td>
-          <td>2026-08-14</td>
-        </tr>
-        <tr data-journey-slug="login">
-          <td>Customer login journey</td>
-          <td>Understand monthly login frequency</td>
-          <td>2</td>
-          <td>1</td>
-          <td>2026-08-14</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="table-scroll">
+
+
+      <table id="table-journeys">
+        <thead>
+          <tr>
+            <th>Journey</th>
+            <th>Requirement</th>
+            <th>Stages</th>
+            <th>KPIs</th>
+            <th>Last generated</th>
+          </tr>
+        </thead>
+        <tbody id="journeys-tbody">
+          <tr data-journey-slug="ecommerce">
+            <td>Ecommerce purchase journey</td>
+            <td>Understand shop performance and drop-off</td>
+            <td>4</td>
+            <td>1</td>
+            <td>2026-08-14</td>
+          </tr>
+          <tr data-journey-slug="login">
+            <td>Customer login journey</td>
+            <td>Understand monthly login frequency</td>
+            <td>2</td>
+            <td>1</td>
+            <td>2026-08-14</td>
+          </tr>
+        </tbody>
+      </table>
+
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Settings</h2>
+    <div class="panel">
+      <label for="field-xdm-base-url">XDM base URL for generated refs</label>
+      <input type="text" id="field-xdm-base-url" placeholder="https://sandbox/SANDBOX_NAME/xdm/">
+      <p class="note">Every component's <code>component_xdm_path</code> column (e.g. <code>commerce.checkouts.value</code>) gets appended to this prefix to build its <code>martech:refs</code> URI when you click Generate turtle. Set this to your org's real AEP sandbox once — it's just a prefix string, not validated against Adobe's actual URL scheme. Changing it only affects journeys generated <em>after</em> the change; existing files keep whatever refs they already have.</p>
+      <p id="xdm-base-url-example" class="note"></p>
+      <p>
+        <button type="button" id="btn-save-settings" class="secondary">Save</button>
+        <span id="settings-status" class="note" style="display:none;"></span>
+      </p>
+    </div>
   </section>
 
   <section>
@@ -133,6 +154,47 @@ function loadLiveJourneys() {
 }
 loadLiveJourneys();
 
+function updateXdmExample() {
+  const base = document.getElementById("field-xdm-base-url").value || "";
+  document.getElementById("xdm-base-url-example").textContent =
+    "Example: " + base + "commerce.checkouts.value";
+}
+
+function loadSettings() {
+  fetch("/api/settings")
+    .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
+    .then(data => {
+      document.getElementById("field-xdm-base-url").value = data.xdm_base_url;
+      updateXdmExample();
+    })
+    .catch(() => { /* leave the field empty; placeholder shows the default */ });
+}
+loadSettings();
+
+document.getElementById("field-xdm-base-url").addEventListener("input", updateXdmExample);
+
+document.getElementById("btn-save-settings").addEventListener("click", () => {
+  const statusEl = document.getElementById("settings-status");
+  statusEl.textContent = "Saving…";
+  statusEl.style.display = "inline";
+
+  fetch("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ xdm_base_url: document.getElementById("field-xdm-base-url").value }),
+  })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (!ok) throw new Error(data.error || "save failed");
+      document.getElementById("field-xdm-base-url").value = data.xdm_base_url;
+      updateXdmExample();
+      statusEl.textContent = "Saved — applies to journeys generated from now on.";
+    })
+    .catch(err => {
+      statusEl.textContent = "Could not save (" + err.message + ").";
+    });
+});
+
 document.getElementById("input-journey-csv").addEventListener("change", ev => {
   const file = ev.target.files[0];
   if (!file) return;
@@ -192,5 +254,6 @@ document.getElementById("btn-generate-turtle").addEventListener("click", () => {
     });
 });
 </script>
+<script src="js/mode-banner.js"></script>
 </body>
 </html>

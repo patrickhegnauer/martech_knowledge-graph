@@ -10,11 +10,8 @@ venv/
 # A user's own data directory (default name from `martech-knowledge-graph serve`)
 martech-knowledge-graph-data/
 
-# graph_explorer.py's standalone output, written to the cwd
-graph.dot
-graph.png
-explorer.html
-graph_network.html
+# Local one-time vendoring workflow for ui/vendor/ (see ui/WIRING.md) --
+# not part of the installed package, never needed by `martech-knowledge-graph serve`.
 node_modules/
 
 # Editor/OS

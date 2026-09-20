@@ -15,12 +15,20 @@ content if this server isn't reachable. Nothing here replaces the flat
 graph_explorer.py's and journey_builder.py's existing functions rather
 than duplicating them.
 
+Two real workspaces, not a copy-files toggle: "demo" mode reads/writes the
+package's bundled, read-only examples/ directory; "org" mode reads/writes
+the caller-provided data_dir. POST /api/mode switches between them at
+runtime (persisted in a .mkg-mode marker file in data_dir); write endpoints
+refuse to run while in demo mode. See ui/js/mode-banner.js for the shared
+banner + switcher every page includes.
+
 Run via the CLI:
     martech-knowledge-graph serve
 """
 
 import csv
 import io
+import json
 from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -68,17 +76,64 @@ def component_key_from_subject(subject):
     return local[len("component_"):] if local.startswith("component_") else local
 
 
+MODE_MARKER_NAME = ".mkg-mode"
+SETTINGS_MARKER_NAME = ".mkg-settings.json"
+
+
 def create_app(data_dir: Path) -> Flask:
-    """Build the Flask app, bound to a specific data directory of *-instances.ttl files."""
+    """Build the Flask app.
+
+    Two real workspaces, not a copy-files toggle: "demo" reads/writes the
+    bundled, read-only EXAMPLES_DIR; "org" reads/writes the caller-provided
+    data_dir. current_dir() resolves which one is active on every request, so
+    switching modes (POST /api/mode) takes effect immediately for every
+    endpoint below -- nothing needs restarting.
+    """
     data_dir = Path(data_dir)
-    cja_sync_file = data_dir / "components-instances.ttl"
+    mode_marker = data_dir / MODE_MARKER_NAME
+    settings_marker = data_dir / SETTINGS_MARKER_NAME
+    state = {"mode": mode_marker.read_text(encoding="utf-8").strip() if mode_marker.exists() else "demo"}
+    if state["mode"] not in ("demo", "org"):
+        state["mode"] = "demo"
 
     app = Flask(__name__, static_folder=str(UI_DIR), static_url_path="")
 
+    def current_dir():
+        return EXAMPLES_DIR if state["mode"] == "demo" else data_dir
+
+    def cja_sync_file():
+        return current_dir() / "components-instances.ttl"
+
+    def require_org_mode():
+        """Returns a (jsonify(...), 403) tuple if in demo mode, else None."""
+        if state["mode"] == "demo":
+            return jsonify({
+                "error": "Demo data is read-only — switch to your own data (top right) to make edits.",
+            }), 403
+        return None
+
+    def load_settings():
+        """Org-workspace settings (e.g. the XDM base URL used for generated refs).
+
+        Always reads from data_dir regardless of active mode -- same as the
+        .mkg-mode marker, this is metadata about the org workspace itself,
+        never written to the read-only bundled EXAMPLES_DIR.
+        """
+        settings = {"xdm_base_url": jb.DEFAULT_XDM_BASE_URL}
+        if settings_marker.exists():
+            try:
+                settings.update(json.loads(settings_marker.read_text(encoding="utf-8")))
+            except (json.JSONDecodeError, OSError):
+                pass
+        return settings
+
+    def save_settings(new_settings):
+        settings_marker.write_text(json.dumps(new_settings, indent=2), encoding="utf-8")
+
     def load_instance_file_graphs():
-        """{Path: rdflib.Graph} for every *-instances.ttl in the data directory."""
+        """{Path: rdflib.Graph} for every *-instances.ttl in the active directory."""
         graphs = {}
-        for path in sorted(data_dir.glob("*-instances.ttl")):
+        for path in sorted(current_dir().glob("*-instances.ttl")):
             g = rdflib.Graph()
             g.parse(path, format="turtle")
             graphs[path] = g
@@ -141,6 +196,7 @@ def create_app(data_dir: Path) -> Flask:
         journeys.sort(key=lambda j: j["label"])
 
         return {
+            "mode": state["mode"],
             "components": components,
             "journeys": journeys,
             "triple_count": len(merged),
@@ -153,6 +209,37 @@ def create_app(data_dir: Path) -> Flask:
     @app.route("/api/state", methods=["GET"])
     def api_state():
         return jsonify(collect_state())
+
+    @app.route("/api/mode", methods=["POST"])
+    def api_set_mode():
+        body = request.get_json(force=True)
+        new_mode = body.get("mode")
+        if new_mode not in ("demo", "org"):
+            return jsonify({"error": "mode must be 'demo' or 'org'"}), 400
+        state["mode"] = new_mode
+        mode_marker.write_text(new_mode, encoding="utf-8")
+        return jsonify({"mode": state["mode"], "state": collect_state()})
+
+    @app.route("/api/settings", methods=["GET"])
+    def api_get_settings():
+        return jsonify(load_settings())
+
+    @app.route("/api/settings", methods=["POST"])
+    def api_save_settings():
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+
+        body = request.get_json(force=True)
+        xdm_base_url = (body.get("xdm_base_url") or "").strip()
+        if not xdm_base_url:
+            return jsonify({"error": "xdm_base_url must not be empty"}), 400
+        xdm_base_url = xdm_base_url.rstrip("/") + "/"
+
+        settings = load_settings()
+        settings["xdm_base_url"] = xdm_base_url
+        save_settings(settings)
+        return jsonify(settings)
 
     @app.route("/api/components/<key>", methods=["GET"])
     def api_get_component(key):
@@ -182,6 +269,10 @@ def create_app(data_dir: Path) -> Flask:
 
     @app.route("/api/components/<key>/context", methods=["POST"])
     def api_save_component_context(key):
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+
         path, g, s = find_component_file(key)
         if s is None:
             return jsonify({"error": f"no component with key '{key}'"}), 404
@@ -217,6 +308,10 @@ def create_app(data_dir: Path) -> Flask:
 
     @app.route("/api/cja/sync", methods=["POST"])
     def api_cja_sync():
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+
         body = request.get_json(force=True)
         dv_id = body.get("data_view_id")
         if dv_id not in CJA_DATA_VIEWS:
@@ -227,10 +322,11 @@ def create_app(data_dir: Path) -> Flask:
         if existing is not None:
             return jsonify({"added": False, "data_view": CJA_DATA_VIEWS[dv_id], "state": collect_state()})
 
+        sync_file = cja_sync_file()
         cja_ns = Namespace("https://example.org/martech/data/cja_sync/")
-        if cja_sync_file.exists():
+        if sync_file.exists():
             g = rdflib.Graph()
-            g.parse(cja_sync_file, format="turtle")
+            g.parse(sync_file, format="turtle")
         else:
             g = rdflib.Graph()
         g.bind("martech", ge.MARTECH)
@@ -249,7 +345,7 @@ def create_app(data_dir: Path) -> Flask:
             "# via component-edit.html before this component is useful in the graph.\n"
             "# ==========================================================================\n\n"
         )
-        cja_sync_file.write_text(header + g.serialize(format="turtle"), encoding="utf-8")
+        sync_file.write_text(header + g.serialize(format="turtle"), encoding="utf-8")
 
         return jsonify({
             "added": True, "data_view": CJA_DATA_VIEWS[dv_id], "component": pull, "state": collect_state(),
@@ -257,6 +353,10 @@ def create_app(data_dir: Path) -> Flask:
 
     @app.route("/api/journeys/generate", methods=["POST"])
     def api_generate_journey():
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+
         body = request.get_json(force=True)
         csv_text = body.get("csv_text", "")
         tmp_path = None
@@ -272,43 +372,31 @@ def create_app(data_dir: Path) -> Flask:
             with NamedTemporaryFile("w", suffix=".csv", delete=False, newline="", encoding="utf-8") as tmp:
                 tmp.write(csv_text)
                 tmp_path = tmp.name
-            turtle_text = jb.build_journey_from_csv(tmp_path)
+            turtle_text = jb.build_journey_from_csv(tmp_path, xdm_base_url=load_settings()["xdm_base_url"])
         except Exception as exc:
             return jsonify({"error": str(exc)}), 400
         finally:
             if tmp_path:
                 Path(tmp_path).unlink(missing_ok=True)
 
-        out_path = data_dir / f"{slug}-instances.ttl"
+        out_path = current_dir() / f"{slug}-instances.ttl"
         out_path.write_text(turtle_text, encoding="utf-8")
 
         return jsonify({"ok": True, "slug": slug, "file": out_path.name, "turtle": turtle_text})
 
     @app.route("/api/graph-data", methods=["GET"])
     def api_graph_data():
-        g = ge.load_graph(ontology_path=ONTOLOGY_FILE, script_dir=data_dir)
+        g = ge.load_graph(ontology_path=ONTOLOGY_FILE, script_dir=current_dir())
         return jsonify(ge.extract_full_graph(g))
 
     @app.route("/api/ttl-bundle", methods=["GET"])
     def api_ttl_bundle():
         instances = {}
-        for path in sorted(data_dir.glob("*-instances.ttl")):
+        for path in sorted(current_dir().glob("*-instances.ttl")):
             instances[path.name] = path.read_text(encoding="utf-8")
         return jsonify({
             "ontology": ONTOLOGY_FILE.read_text(encoding="utf-8"),
             "instances": instances,
         })
-
-    @app.route("/api/demo/load", methods=["POST"])
-    def api_load_demo():
-        added, skipped = [], []
-        for example_path in sorted(EXAMPLES_DIR.glob("*-instances.ttl")):
-            target = data_dir / example_path.name
-            if target.exists():
-                skipped.append(target.name)
-            else:
-                target.write_text(example_path.read_text(encoding="utf-8"), encoding="utf-8")
-                added.append(target.name)
-        return jsonify({"added": added, "skipped": skipped, "state": collect_state()})
 
     return app

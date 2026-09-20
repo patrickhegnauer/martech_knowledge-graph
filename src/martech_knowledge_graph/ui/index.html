@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Martech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -23,12 +24,12 @@
 </nav>
 <main>
   <section>
-    <h2>End-to-end loop</h2>
-    <p>The platform proves one loop: pull a component, add business context, author a journey, see it in the graph, then query it.</p>
+    <h2 id="loop-heading">End-to-end loop</h2>
+    <p class="note" id="kickstart-note">Checking for a local API…</p>
     <ol class="checklist">
-      <li><span class="step-marker"></span> <a href="components.html">1. Pull components from CJA</a></li>
-      <li><span class="step-marker"></span> <a href="component-edit.html">2. Add context to a component</a></li>
-      <li><span class="step-marker"></span> <a href="journeys.html">3. Author journeys (CSV)</a></li>
+      <li><span class="step-marker" id="step-marker-components"></span> <a href="components.html">1. Pull components from CJA</a></li>
+      <li><span class="step-marker" id="step-marker-context"></span> <a href="component-edit.html">2. Add context to a component</a></li>
+      <li><span class="step-marker" id="step-marker-journeys"></span> <a href="journeys.html">3. Author journeys (CSV)</a></li>
       <li><span class="step-marker"></span> <a href="graph.html">4. View the graph</a></li>
       <li><span class="step-marker"></span> <a href="query.html">5. Query the graph</a></li>
     </ol>
@@ -36,7 +37,6 @@
 
   <section>
     <h2>Status</h2>
-    <p class="note" id="live-mode-note">Checking for a local API…</p>
     <div class="counters">
       <div class="counter">
         <span class="value" id="counter-total">5</span>
@@ -59,11 +59,6 @@
         <span class="label">Triples in graph</span>
       </div>
     </div>
-    <p>
-      <button type="button" id="btn-load-demo" class="secondary">Load demo data</button>
-      <span id="demo-load-status" class="note" style="display:none;"></span>
-    </p>
-    <p class="note">Starts empty on a fresh install — click this to seed the two example journeys (ecommerce funnel, customer login) so there's something to explore. Safe to click again; it skips files that already exist.</p>
   </section>
 
   <section>
@@ -77,7 +72,12 @@
 <footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running. Falls back to static sample numbers otherwise.</footer>
 
 <script>
+function setStepDone(id, done) {
+  document.getElementById(id).classList.toggle("done", done);
+}
+
 function refreshCounters() {
+  const kickstartEl = document.getElementById("kickstart-note");
   return fetch("/api/state")
     .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
     .then(data => {
@@ -90,37 +90,28 @@ function refreshCounters() {
       document.getElementById("counter-coverage").textContent = pct + "%";
       document.getElementById("counter-journeys").textContent = data.journeys.length;
       document.getElementById("counter-triples").textContent = data.triple_count;
-      document.getElementById("live-mode-note").textContent = "Live data.";
-      return true;
+
+      setStepDone("step-marker-components", total > 0);
+      setStepDone("step-marker-context", withContext > 0);
+      setStepDone("step-marker-journeys", data.journeys.length > 0);
+
+      if (data.mode === "demo") {
+        kickstartEl.textContent =
+          "You're exploring the bundled demo data (read-only) — switch to your data (top right) when you're ready to set up your own environment.";
+      } else if (total === 0 && data.journeys.length === 0) {
+        kickstartEl.textContent =
+          "This is your own workspace — currently empty. Here's what's needed to set it up:";
+      } else {
+        kickstartEl.textContent = "This is your own workspace. Current progress:";
+      }
     })
     .catch(() => {
-      document.getElementById("live-mode-note").textContent =
+      kickstartEl.textContent =
         "Showing static sample numbers — start the local API (`martech-knowledge-graph serve`) for live data.";
-      return false;
     });
 }
 refreshCounters();
-
-document.getElementById("btn-load-demo").addEventListener("click", () => {
-  const statusEl = document.getElementById("demo-load-status");
-  statusEl.textContent = "Loading…";
-  statusEl.style.display = "inline";
-
-  fetch("/api/demo/load", { method: "POST" })
-    .then(r => r.json().then(data => ({ ok: r.ok, data })))
-    .then(({ ok, data }) => {
-      if (!ok) throw new Error(data.error || "load failed");
-      if (data.added.length) {
-        statusEl.textContent = "Added: " + data.added.join(", ") + ".";
-      } else {
-        statusEl.textContent = "Demo data already present — nothing to add.";
-      }
-      refreshCounters();
-    })
-    .catch(err => {
-      statusEl.textContent = "Could not reach the local API (" + err.message + ") — run `martech-knowledge-graph serve` first.";
-    });
-});
 </script>
+<script src="js/mode-banner.js"></script>
 </body>
 </html>

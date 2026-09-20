@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Edit Component — Martech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -57,21 +58,25 @@
 
       <h3>References to Adobe's native graph (martech:refs)</h3>
       <p class="note">Pointers only — the identity of a component stays authoritative in AEP. Never duplicate that content here.</p>
-      <table id="table-refs">
-        <thead>
-          <tr><th>Label</th><th>Identifier / URL</th></tr>
-        </thead>
-        <tbody id="refs-tbody">
-          <tr data-ref-index="0">
-            <td><input type="text" name="refs_label" value="AEP XDM field"></td>
-            <td><input type="text" name="refs" value="https://sandbox/champion/xdm/commerce.productViews.value"></td>
-          </tr>
-          <tr data-ref-index="1">
-            <td><input type="text" name="refs_label" value="CJA component definition"></td>
-            <td><input type="text" name="refs" value="https://experience.adobe.com/cja/#/components/metrics/productViews"></td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-scroll">
+
+        <table id="table-refs">
+          <thead>
+            <tr><th>Label</th><th>Identifier / URL</th></tr>
+          </thead>
+          <tbody id="refs-tbody">
+            <tr data-ref-index="0">
+              <td><input type="text" name="refs_label" value="AEP XDM field"></td>
+              <td><input type="text" name="refs" value="https://sandbox/champion/xdm/commerce.productViews.value"></td>
+            </tr>
+            <tr data-ref-index="1">
+              <td><input type="text" name="refs_label" value="CJA component definition"></td>
+              <td><input type="text" name="refs" value="https://experience.adobe.com/cja/#/components/metrics/productViews"></td>
+            </tr>
+          </tbody>
+        </table>
+
+      </div>
       <button type="button" id="btn-add-ref" class="secondary">Add reference row</button>
 
       <p>
@@ -191,5 +196,6 @@ document.getElementById("btn-save-component").addEventListener("click", () => {
     });
 });
 </script>
+<script src="js/mode-banner.js"></script>
 </body>
 </html>

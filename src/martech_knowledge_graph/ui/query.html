@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Query — Martech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -49,12 +50,16 @@ SELECT ?label ?definition ?caveats ?owner WHERE {
         <span id="query-status"></span>
 
         <h3>Results</h3>
-        <table id="table-query-results">
-          <thead>
-            <tr></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+        <div class="table-scroll">
+
+          <table id="table-query-results">
+            <thead>
+              <tr></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+
+        </div>
       </div>
 
       <div class="col-side">
@@ -83,7 +88,7 @@ SELECT ?label ?definition ?caveats ?owner WHERE {
     </div>
   </section>
 </main>
-<footer class="site-footer">Query page runs a real SPARQL engine (JS/WASM). All other pages except Graph remain static and JS-free.</footer>
+<footer class="site-footer">Query page runs a real SPARQL engine (JS/WASM). Every page also includes the shared demo/org mode banner (js/mode-banner.js); otherwise the rest stay static and JS-free.</footer>
 
 <script src="vendor/oxigraph.wasm.b64.js"></script>
 <script src="vendor/oxigraph.web.js"></script>
@@ -232,5 +237,6 @@ document.getElementById("btn-run-query").addEventListener("click", runQuery);
     });
 })();
 </script>
+<script src="js/mode-banner.js"></script>
 </body>
 </html>

@@ -1,8 +1,10 @@
 # Wiring reference
 
-This document lists every `<!-- WIRE: ... -->` attachment point in the UI shell, plus the final
-component form field → ontology property mapping. It exists so the real logic can be wired into
-the existing markup without restructuring any page.
+This document started out listing every `<!-- WIRE: ... -->` attachment point in a static UI shell, so
+real logic could be wired in without restructuring any page. Most of the app is live now — the sections
+below are in roughly the order things were built, each one covering what changed and why. For a
+high-level picture instead of this page-by-page detail, see the architecture diagram in the root
+`README.md`. What's left below as genuine, unwired `<!-- WIRE -->` points:
 
 ## WIRE points
 
@@ -166,7 +168,8 @@ are called directly, unmodified).
 design goal, verified for each page below: each `fetch()` has a `.catch()` that falls back to that page's
 original static/embedded content, so `ui/index.html` opened via `file://` with no server running still
 works exactly as it did before this change. A `#live-mode-note` (or `#engine-status` on query.html)
-element on every wired page reports which mode is active.
+element on every wired page reports whether it's showing live or fallback data (not to be confused with
+the separate demo/org data-mode concept documented further down).
 
 | Endpoint | Method | Used by |
 |---|---|---|
@@ -224,22 +227,97 @@ how the pieces above are wired together, though none of the endpoint contracts o
   `fetch("/api/...")` calls. This is a pure simplification with no behavior change: a relative fetch from
   a page opened via `file://` still fails to resolve to anything real and falls into the same `.catch()`
   fallback path as before — verified by re-running the fallback tests after this change.
-- **New**: `POST /api/demo/load` and an "Load demo data" button on `index.html` (`#btn-load-demo`,
-  `#demo-load-status`). Copies `examples/*.ttl` from the package into the active data directory, skipping
-  files that already exist — same idempotent-report pattern as `/api/cja/sync`. This is the only way to
-  get demo content; `martech-knowledge-graph serve` always starts with an empty data directory, by design
-  (a fresh install is meant to start empty, not pre-loaded).
-- **`graph_explorer.py`'s standalone CLI mode** (`python -m martech_knowledge_graph.graph_explorer`,
-  independent of the web UI) had its own path bug fixed as part of this move: it used to write
-  `graph.png`/`explorer.html`/etc. next to itself, which becomes a read-only `site-packages` directory
-  once pip-installed. It now writes to the current working directory, and its `load_graph()` default
-  `script_dir` points at the bundled `examples/` folder (previously its own directory) so running it
-  standalone still produces something useful out of the box.
+- **`graph_explorer.py`'s standalone CLI mode was later removed entirely** (a separate cleanup pass, after
+  this restructure): it used to shell out to Graphviz for a PNG export and write two now-superseded
+  static HTML files (`explorer.html`, `graph_network.html`, the latter needing its own separate
+  `npm install vis-network`). None of that was reachable from, or needed by, the web UI — `server.py` only
+  ever used `load_graph()` and `extract_full_graph()` as a library. `graph_explorer.py` is now just that
+  library (no `main()`, no Graphviz/npm dependency, no CLI). `query_graph.py` (four standalone sample
+  queries, also never imported by anything) was deleted for the same reason — `query.html`'s own
+  sample-query dropdown already covers this live, against real data.
 
 Verified end-to-end after the restructure (not just individually): `pip install -e .` from a clean
 checkout, `martech-knowledge-graph serve` from a different working directory, confirmed `/`,
 `/components.html`, `css/`, and `vendor/` all resolve; confirmed a fresh data directory starts at
-0 components / 0 journeys with no error (113 triples — the ontology schema alone); confirmed
-"Load demo data" populates it, is idempotent, and both `index.html`'s counters and `components.html`'s
-live table reflect it immediately; confirmed the `file://` fallback path still works with the new
-relative-URL code, using a broken-fetch stub against the real page markup.
+0 components / 0 journeys with no error (113 triples — the ontology schema alone); confirmed the
+`file://` fallback path still works with the new relative-URL code, using a broken-fetch stub against
+the real page markup.
+
+## Demo/org mode switcher + Home kickstart (new)
+
+Replaces the earlier copy-files "Load demo data" button entirely (see the packaging section above for
+context on why that existed) with two real, separate workspaces instead of one directory with copied-in
+files:
+
+- **`server.py`**: `create_app(data_dir)` now holds mutable `state["mode"]` (`"demo"` or `"org"`) and a
+  `current_dir()` helper resolving to `EXAMPLES_DIR` (bundled, read-only) or `data_dir` (the caller's
+  `--data-dir`) on every request — every endpoint that used to close over `data_dir` directly now calls
+  `current_dir()` instead, so a mode switch takes effect immediately, no restart. `GET /api/state` gained
+  a `"mode"` field (no separate read endpoint needed — every page that already polls `/api/state` gets it
+  for free). `POST /api/mode` (body `{"mode": "demo"|"org"}`) switches it and persists the choice to
+  `data_dir/.mkg-mode`, read back on `create_app()` startup (defaults to `"demo"` if the marker doesn't
+  exist yet — a fresh install opens in the guided-tour state). The three write endpoints
+  (`/api/components/<key>/context`, `/api/cja/sync`, `/api/journeys/generate`) each call a
+  `require_org_mode()` guard first and return `403` with a clear message if still in demo mode, rather
+  than writing into the installed package's `examples/` directory.
+- **`ui/js/mode-banner.js`** (new file): the one shared script included on **all 9 pages** — deliberately
+  the exception to the "most pages are JS-free" pattern, since the user wants the banner/switcher
+  reachable everywhere, not just on pages that already had their own inline script. Fetches `/api/state`
+  once; in demo mode, inserts a full-width banner as the first child of `<body>`; always injects a
+  "Demo data"/"Your data" label + toggle button into the top-right of `<header class="site-header">`
+  (which is now `display: flex; justify-content: space-between` in CSS specifically to receive it). The
+  toggle `POST`s `/api/mode` and reloads the page; switching *to* org data confirms first (explains
+  nothing is deleted), switching *to* demo doesn't (non-destructive either way). If the API isn't
+  reachable, this script does nothing — each page's own fallback note already covers that case.
+- **`index.html`'s "End-to-end loop" checklist is now live**, reusing the same `/api/state` fetch
+  `refreshCounters()` already did (no second request): steps 1–3 ("Pull components", "Add context",
+  "Author journeys") get a `.step-marker.done` (filled circle, CSS checkmark) when
+  `components.length > 0`, any `component.has_context`, and `journeys.length > 0` respectively. Steps 4–5
+  stay plain action links — they're things to do, not milestones. A `#kickstart-note` line above the
+  checklist changes by mode/state: demo mode explains you're looking at read-only bundled data; org mode
+  with everything empty frames the checklist explicitly as "what's needed to set this up"; org mode with
+  some data just reports progress. The old `#btn-load-demo` button and its explanatory paragraph were
+  removed — superseded by the header switcher, now present on this page too like every other.
+
+**Verified this session** (real running server, not mocked): fresh install defaults to demo mode
+(238 triples, 5 components, 2 journeys); all three write endpoints correctly refused with `403` while in
+demo mode, confirmed nothing was written into the package's `examples/` directory; switching to org mode
+showed the correct empty state (113 triples, 0/0); a real CJA sync in org mode succeeded and wrote to
+`data_dir/components-instances.ttl`; switching back to demo restored the original 5/2/238 state unchanged;
+restarting the server against the same `--data-dir` correctly re-read the persisted mode from
+`.mkg-mode` instead of resetting to demo; `mode-banner.js` and `index.html`'s checklist were both
+exercised against the real server in all three states (demo, org-empty, org-with-partial-progress) and
+produced the correct banner/switcher/kickstart text and checkmark states in each.
+
+## Configurable XDM base URL for generated refs (new)
+
+Every `refs` URI `journey_builder.py` generates used to be hardcoded to
+`https://sandbox/SANDBOX_NAME/xdm/<xdm_path>` — `SANDBOX_NAME` a literal placeholder, not something an
+org could set. One hardcoded f-string, one function (`build_journey_turtle()`), was the only place this
+existed; CJA-synced components never got a `refs` value at all, and `component-edit.html`'s manual refs
+table already lets you type any URL freely per-component, so neither needed to change.
+
+- **`journey_builder.py`**: `DEFAULT_XDM_BASE_URL = "https://sandbox/SANDBOX_NAME/xdm/"` module constant
+  preserves today's exact output when nothing is customized. `build_journey_turtle(spec, xdm_base_url=...)`
+  and `build_journey_from_csv(csv_path, xdm_base_url=...)` both gained the parameter — the CSV format
+  itself is unchanged, `component_xdm_path` still just supplies the relative part.
+- **`server.py`**: a second per-workspace marker file, `.mkg-settings.json` (same directory as `.mkg-mode`,
+  same reasoning — org-workspace metadata, never written to the read-only `EXAMPLES_DIR`), holds
+  `{"xdm_base_url": "..."}`. `GET /api/settings` always readable regardless of mode (just reports the
+  stored value); `POST /api/settings` normalizes the input (trim, exactly one trailing `/`) and is gated
+  by the same `require_org_mode()` guard as the other write endpoints — you can't reconfigure org settings
+  while looking at the read-only demo tour. `/api/journeys/generate` loads the current setting and passes
+  it through to `build_journey_from_csv()`, so a change takes effect on the very next generation, no
+  restart needed.
+- **`journeys.html`**: a new "Settings" panel above the CSV upload panel — `#field-xdm-base-url` (loaded
+  from `GET /api/settings` on page load), a live-updating `#xdm-base-url-example` line showing the
+  resulting full URL for a sample path, and `#btn-save-settings` (`POST /api/settings`). Reuses the same
+  error-surfacing pattern as the rest of the page for the `403` demo-mode-blocked case. No retroactive
+  rewrite tooling — changing this only affects journeys generated after the change, by design.
+
+**Verified this session** (real running server): default value confirmed unchanged
+(`https://sandbox/SANDBOX_NAME/xdm/`); `POST /api/settings` refused with `403` while in demo mode;
+switched to org mode, saved a custom base URL, confirmed it was normalized and persisted to
+`.mkg-settings.json`; generated a journey afterward and confirmed its `refs` used the custom prefix;
+exercised `journeys.html`'s panel against the real served page — initial load, live example update while
+typing, save, and the demo-mode-blocked error message all correct.
