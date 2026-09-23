@@ -65,7 +65,15 @@ def _esc(s):
     return s.replace('"', "'")
 
 
-def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE_URL) -> str:
+def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE_URL,
+                         existing_components: dict = None) -> str:
+    """existing_components maps component key -> URI of a component already defined elsewhere in the
+    workspace; those are referenced instead of redefined, so their curated context is kept."""
+    existing_components = existing_components or {}
+
+    def comp_ref(key):
+        return f"<{existing_components[key]}>" if key in existing_components else f"data:component_{key}"
+
     data_ns = f"https://example.org/martech/data/{spec.slug}/"
     lines = [
         f"# ==========================================================================",
@@ -145,6 +153,8 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
         "",
     ]
     for c in spec.components:
+        if c.key in existing_components:
+            continue
         lines += [
             f"data:component_{c.key} a martech:Component ;",
             f'    rdfs:label "{_esc(c.label)}" ;',
@@ -167,7 +177,7 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
             "data:dlv a martech:DataLayerVariable ;",
             f'    rdfs:label "{_esc(spec.data_layer_variable)}" ;',
             f'    martech:source_system "{_esc(spec.data_layer_source_system)}" ;',
-            "    martech:maps_to " + ", ".join(f"data:component_{k}" for k in used_component_keys) + " .",
+            "    martech:maps_to " + ", ".join(comp_ref(k) for k in used_component_keys) + " .",
             "",
         ]
 
@@ -183,10 +193,10 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
             f"    martech:measured_entity data:stage_{s.key} ;",
         ]
         if s.filter_value:
-            block.append(f"    martech:measured_component data:component_{s.component_key} ;")
+            block.append(f"    martech:measured_component {comp_ref(s.component_key)} ;")
             block.append(f'    martech:filter_value "{_esc(s.filter_value)}" .')
         else:
-            block.append(f"    martech:measured_component data:component_{s.component_key} .")
+            block.append(f"    martech:measured_component {comp_ref(s.component_key)} .")
         lines += block + [""]
 
     return "\n".join(lines).rstrip() + "\n"
@@ -201,7 +211,8 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
 import csv
 
 
-def build_journey_from_csv(csv_path: str, xdm_base_url: str = DEFAULT_XDM_BASE_URL) -> str:
+def build_journey_from_csv(csv_path: str, xdm_base_url: str = DEFAULT_XDM_BASE_URL,
+                           existing_components: dict = None) -> str:
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     if not rows:
@@ -259,7 +270,7 @@ def build_journey_from_csv(csv_path: str, xdm_base_url: str = DEFAULT_XDM_BASE_U
         data_layer_variable=first.get("data_layer_variable", "").strip() or None,
         data_layer_source_system=first.get("data_layer_source_system", "").strip() or "Web data layer (digitalData)",
     )
-    return build_journey_turtle(spec, xdm_base_url=xdm_base_url)
+    return build_journey_turtle(spec, xdm_base_url=xdm_base_url, existing_components=existing_components)
 
 
 CSV_COLUMNS = [

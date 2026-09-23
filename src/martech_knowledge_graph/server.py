@@ -372,7 +372,18 @@ def create_app(data_dir: Path) -> Flask:
             with NamedTemporaryFile("w", suffix=".csv", delete=False, newline="", encoding="utf-8") as tmp:
                 tmp.write(csv_text)
                 tmp_path = tmp.name
-            turtle_text = jb.build_journey_from_csv(tmp_path, xdm_base_url=load_settings()["xdm_base_url"])
+            own_file = current_dir() / f"{slug}-instances.ttl"
+            existing = {}
+            for path, fg in load_instance_file_graphs().items():
+                if path == own_file:
+                    continue
+                for subj in fg.subjects(RDF.type, MARTECH.Component):
+                    existing.setdefault(component_key_from_subject(subj), str(subj))
+            turtle_text = jb.build_journey_from_csv(
+                tmp_path, xdm_base_url=load_settings()["xdm_base_url"], existing_components=existing
+            )
+            used = {r["component_key"].strip() for r in rows}
+            reused = sorted(used & existing.keys())
         except Exception as exc:
             return jsonify({"error": str(exc)}), 400
         finally:
@@ -382,7 +393,8 @@ def create_app(data_dir: Path) -> Flask:
         out_path = current_dir() / f"{slug}-instances.ttl"
         out_path.write_text(turtle_text, encoding="utf-8")
 
-        return jsonify({"ok": True, "slug": slug, "file": out_path.name, "turtle": turtle_text})
+        return jsonify({"ok": True, "slug": slug, "file": out_path.name, "turtle": turtle_text,
+                        "reused_components": reused})
 
     @app.route("/api/graph-data", methods=["GET"])
     def api_graph_data():
