@@ -121,23 +121,19 @@
     </div>
 
     <div id="cja-step-config">
-      <p class="note">Stored only in this browser (localStorage), never sent anywhere — this UI simulates the CJA Semantic Layer MCP connection, it does not call the real CJA API.</p>
+      <p class="note">Credentials of an Adobe Developer Console project with an <strong>OAuth Server-to-Server</strong> credential and the Customer Journey Analytics API. They are saved on the machine running this server (<code>.mkg-cja.json</code> in your data directory), never in the browser and never in your graph files.</p>
       <form id="form-cja-config" class="field-form" action="#">
-        <label for="cja-client-id">Client ID</label>
-        <input type="text" id="cja-client-id" name="client_id" placeholder="e.g. a1b2c3d4e5f6...">
+        <label for="cja-client-id">Client ID (API key)</label>
+        <input type="text" id="cja-client-id" name="client_id" autocomplete="off">
 
         <label for="cja-client-secret">Client secret</label>
-        <input type="password" id="cja-client-secret" name="client_secret" placeholder="••••••••••••">
+        <input type="password" id="cja-client-secret" name="client_secret" autocomplete="off" placeholder="••••••••••••">
 
         <label for="cja-org-id">Organization ID</label>
-        <input type="text" id="cja-org-id" name="org_id" placeholder="e.g. 1A2B3C4D5E6F@AdobeOrg">
+        <input type="text" id="cja-org-id" name="org_id" autocomplete="off" placeholder="e.g. 1A2B3C4D5E6F@AdobeOrg">
 
-        <label>Scopes</label>
-        <div class="scope-list">
-          <label><input type="checkbox" name="cja-scope" value="cja:components.read" checked> cja:components.read</label>
-          <label><input type="checkbox" name="cja-scope" value="cja:dataviews.read" checked> cja:dataviews.read</label>
-          <label><input type="checkbox" name="cja-scope" value="cja:segments.read"> cja:segments.read</label>
-        </div>
+        <label for="cja-scopes">Scopes (comma-separated)</label>
+        <input type="text" id="cja-scopes" name="scopes" autocomplete="off">
 
         <p class="note note-error" id="cja-config-error" style="display:none;"></p>
 
@@ -145,54 +141,49 @@
           <button type="button" id="btn-cja-connect">Save &amp; Connect</button>
         </p>
       </form>
-      <!-- WIRE: exchange client_id/client_secret/org_id/scopes for a real CJA session token | reuses: CJA Semantic Layer MCP -->
     </div>
 
     <div id="cja-step-dataview" hidden>
       <p class="cja-status-line connected">Connected — org <span id="cja-connected-org"></span></p>
       <label for="cja-dataview-select">Data view to sync</label>
-      <select id="cja-dataview-select">
-        <option value="dv_prod_web">Production - Website</option>
-        <option value="dv_prod_app">Production - Mobile App</option>
-        <option value="dv_staging_web">Staging - Website</option>
-      </select>
+      <select id="cja-dataview-select"></select>
       <p>
-        <button type="button" id="btn-cja-sync">Sync</button>
+        <button type="button" id="btn-cja-sync">Sync metrics &amp; dimensions</button>
         <button type="button" id="btn-cja-reconfigure" class="secondary">Reconfigure</button>
         <button type="button" id="btn-cja-disconnect" class="secondary">Disconnect</button>
       </p>
       <p id="cja-sync-result" class="note" style="display:none;"></p>
-      <!-- WIRE: pull components (name, id, type, data view, CJA description) for the selected data view | reuses: CJA Semantic Layer MCP -->
     </div>
   </div>
 </div>
 
-<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running — the CJA connect/config step is still simulated (no real OAuth), but Sync really writes to disk. Falls back to a static example table otherwise.</footer>
+<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`). Sync calls the real CJA API with your saved credentials and writes new components to components-instances.ttl; components you already have are never overwritten. Falls back to a static example table if the API isn't running.</footer>
 
 <script>
-const CJA_STORAGE_KEY = "martechKG.cjaConfig";
-
-const CJA_DATA_VIEWS = {
-  dv_prod_web: "Production - Website",
-  dv_prod_app: "Production - Mobile App",
-  dv_staging_web: "Staging - Website",
-};
-
 function renderComponentsTable(components) {
   const tbody = document.querySelector("#table-components tbody");
   tbody.innerHTML = "";
   components.forEach(c => {
     const tr = document.createElement("tr");
     tr.dataset.componentId = c.key;
-    const badgeClass = c.has_context ? "badge-has-context" : "badge-missing-context";
-    const badgeText = c.has_context ? "Has context" : "Missing context";
-    tr.innerHTML =
-      "<td>" + c.name + "</td>" +
-      "<td>" + c.type + "</td>" +
-      "<td>" + c.cja_id + "</td>" +
-      "<td>" + (c.owner || "—") + "</td>" +
-      '<td><span class="badge ' + badgeClass + '">' + badgeText + "</span></td>" +
-      '<td><a href="component-edit.html?id=' + c.key + '">Edit</a></td>';
+    const cells = [c.name, c.type, c.cja_id, c.owner || "—"];
+    cells.forEach(text => {
+      const td = document.createElement("td");
+      td.textContent = text;
+      tr.appendChild(td);
+    });
+    const badgeTd = document.createElement("td");
+    const badge = document.createElement("span");
+    badge.className = "badge " + (c.has_context ? "badge-has-context" : "badge-missing-context");
+    badge.textContent = c.has_context ? "Has context" : "Missing context";
+    badgeTd.appendChild(badge);
+    tr.appendChild(badgeTd);
+    const editTd = document.createElement("td");
+    const a = document.createElement("a");
+    a.href = "component-edit.html?id=" + encodeURIComponent(c.key);
+    a.textContent = "Edit";
+    editTd.appendChild(a);
+    tr.appendChild(editTd);
     tbody.appendChild(tr);
   });
 }
@@ -214,31 +205,6 @@ function loadLiveState() {
     });
 }
 
-function loadCjaConfig() {
-  try { return JSON.parse(localStorage.getItem(CJA_STORAGE_KEY) || "null"); }
-  catch (e) { return null; }
-}
-function saveCjaConfig(cfg) {
-  try { localStorage.setItem(CJA_STORAGE_KEY, JSON.stringify(cfg)); }
-  catch (e) { /* localStorage unavailable (e.g. private browsing) — connection just won't persist across reloads */ }
-}
-
-const modal = document.getElementById("modal-cja-config");
-const stepConfig = document.getElementById("cja-step-config");
-const stepDataview = document.getElementById("cja-step-dataview");
-
-function refreshToolbarStatus() {
-  const cfg = loadCjaConfig();
-  const el = document.getElementById("cja-connection-status");
-  if (cfg) {
-    el.textContent = "CJA: connected — org " + cfg.orgId;
-    el.classList.add("connected");
-  } else {
-    el.textContent = "CJA: not connected";
-    el.classList.remove("connected");
-  }
-}
-
 function updateContextCoverage() {
   const rows = document.querySelectorAll("#table-components tbody tr");
   const total = rows.length;
@@ -249,98 +215,141 @@ function updateContextCoverage() {
     pct + "% (" + withContext + " of " + total + ")";
 }
 
+const modal = document.getElementById("modal-cja-config");
+const stepConfig = document.getElementById("cja-step-config");
+const stepDataview = document.getElementById("cja-step-dataview");
+const errorEl = document.getElementById("cja-config-error");
+const resultEl = document.getElementById("cja-sync-result");
+let cjaConfig = { configured: false };
+
+function api(path, options) {
+  return fetch(path, options).then(r =>
+    r.json().catch(() => ({})).then(data => {
+      if (!r.ok) throw new Error(data.error || ("request failed (" + r.status + ")"));
+      return data;
+    })
+  );
+}
+
+function refreshToolbarStatus() {
+  const el = document.getElementById("cja-connection-status");
+  if (cjaConfig.configured) {
+    el.textContent = "CJA: configured — org " + cjaConfig.org_id;
+    el.classList.add("connected");
+  } else {
+    el.textContent = "CJA: not connected";
+    el.classList.remove("connected");
+  }
+}
+
+function loadCjaConfig() {
+  return api("/api/cja/config").then(cfg => { cjaConfig = cfg; refreshToolbarStatus(); return cfg; })
+    .catch(() => { cjaConfig = { configured: false }; refreshToolbarStatus(); return cjaConfig; });
+}
+
 function showConfigStep() {
   stepConfig.hidden = false;
   stepDataview.hidden = true;
-  const cfg = loadCjaConfig();
-  if (cfg) {
-    document.getElementById("cja-client-id").value = cfg.clientId;
-    document.getElementById("cja-org-id").value = cfg.orgId;
-    document.querySelectorAll('input[name="cja-scope"]').forEach(cb => {
-      cb.checked = cfg.scopes.includes(cb.value);
-    });
-  }
-  document.getElementById("cja-config-error").style.display = "none";
+  document.getElementById("cja-client-id").value = cjaConfig.client_id || "";
+  document.getElementById("cja-org-id").value = cjaConfig.org_id || "";
+  document.getElementById("cja-scopes").value = cjaConfig.scopes || "";
+  document.getElementById("cja-client-secret").value = "";
+  document.getElementById("cja-client-secret").placeholder = cjaConfig.configured ? "(saved — leave empty to keep)" : "••••••••••••";
+  errorEl.style.display = "none";
 }
 
-function showDataviewStep(cfg) {
+function showDataviewStep() {
   stepConfig.hidden = true;
   stepDataview.hidden = false;
-  document.getElementById("cja-connected-org").textContent = cfg.orgId;
-  document.getElementById("cja-sync-result").style.display = "none";
+  document.getElementById("cja-connected-org").textContent = cjaConfig.org_id;
+  resultEl.style.display = "none";
+  const select = document.getElementById("cja-dataview-select");
+  select.innerHTML = "";
+  select.disabled = true;
+  resultEl.textContent = "Loading data views…";
+  resultEl.style.display = "block";
+  api("/api/cja/dataviews")
+    .then(data => {
+      data.data_views.forEach(dv => {
+        const opt = document.createElement("option");
+        opt.value = dv.id;
+        opt.textContent = dv.name;
+        select.appendChild(opt);
+      });
+      select.disabled = data.data_views.length === 0;
+      resultEl.textContent = data.data_views.length ? "" : "No data views are visible to this credential — check its product profile.";
+      resultEl.style.display = data.data_views.length ? "none" : "block";
+    })
+    .catch(err => { resultEl.textContent = "Could not load data views: " + err.message; });
 }
 
 document.getElementById("btn-sync-cja").addEventListener("click", () => {
-  const cfg = loadCjaConfig();
-  if (cfg) showDataviewStep(cfg); else showConfigStep();
   modal.hidden = false;
+  loadCjaConfig().then(cfg => { if (cfg.configured) showDataviewStep(); else showConfigStep(); });
 });
 
 document.getElementById("btn-cja-close").addEventListener("click", () => { modal.hidden = true; });
 modal.addEventListener("click", ev => { if (ev.target === modal) modal.hidden = true; });
-
 document.getElementById("form-cja-config").addEventListener("submit", ev => ev.preventDefault());
 
 document.getElementById("btn-cja-connect").addEventListener("click", () => {
-  const clientId = document.getElementById("cja-client-id").value.trim();
-  const clientSecret = document.getElementById("cja-client-secret").value.trim();
-  const orgId = document.getElementById("cja-org-id").value.trim();
-  const scopes = Array.from(document.querySelectorAll('input[name="cja-scope"]:checked')).map(cb => cb.value);
-  const errorEl = document.getElementById("cja-config-error");
-
-  if (!clientId || !clientSecret || !orgId || scopes.length === 0) {
-    errorEl.textContent = "Client ID, client secret, org ID, and at least one scope are required.";
-    errorEl.style.display = "block";
-    return;
-  }
-
-  const cfg = { clientId, clientSecret, orgId, scopes, connectedAt: new Date().toISOString() };
-  saveCjaConfig(cfg);
-  refreshToolbarStatus();
-  showDataviewStep(cfg);
+  const button = document.getElementById("btn-cja-connect");
+  errorEl.style.display = "none";
+  button.disabled = true;
+  button.textContent = "Connecting…";
+  api("/api/cja/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      client_id: document.getElementById("cja-client-id").value,
+      client_secret: document.getElementById("cja-client-secret").value,
+      org_id: document.getElementById("cja-org-id").value,
+      scopes: document.getElementById("cja-scopes").value,
+    }),
+  })
+    .then(() => loadCjaConfig())
+    .then(() => showDataviewStep())
+    .catch(err => { errorEl.textContent = err.message; errorEl.style.display = "block"; })
+    .finally(() => { button.disabled = false; button.textContent = "Save & Connect"; });
 });
 
 document.getElementById("btn-cja-reconfigure").addEventListener("click", showConfigStep);
 
 document.getElementById("btn-cja-disconnect").addEventListener("click", () => {
-  localStorage.removeItem(CJA_STORAGE_KEY);
-  refreshToolbarStatus();
-  modal.hidden = true;
+  api("/api/cja/config", { method: "DELETE" })
+    .then(() => loadCjaConfig())
+    .then(() => { modal.hidden = true; })
+    .catch(err => { resultEl.textContent = err.message; resultEl.style.display = "block"; });
 });
 
 document.getElementById("btn-cja-sync").addEventListener("click", () => {
-  const dvId = document.getElementById("cja-dataview-select").value;
-  const dvLabel = CJA_DATA_VIEWS[dvId];
-  const resultEl = document.getElementById("cja-sync-result");
-  resultEl.textContent = "Syncing…";
+  const select = document.getElementById("cja-dataview-select");
+  if (!select.value) return;
+  const label = select.options[select.selectedIndex].textContent;
+  const button = document.getElementById("btn-cja-sync");
+  resultEl.textContent = "Syncing " + label + "…";
   resultEl.style.display = "block";
+  button.disabled = true;
 
-  fetch("/api/cja/sync", {
+  api("/api/cja/sync", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ data_view_id: dvId }),
+    body: JSON.stringify({ data_view_id: select.value }),
   })
-    .then(r => r.json().then(data => ({ ok: r.ok, data })))
-    .then(({ ok, data }) => {
-      if (!ok) throw new Error(data.error || "sync failed");
+    .then(data => {
       renderComponentsTable(data.state.components);
       updateContextCoverage();
-      resultEl.textContent = data.added
-        ? "Synced. Pulled 1 new component (" + data.component.name + ") from " + dvLabel + " — written to components-instances.ttl."
-        : "Synced. " + dvLabel + " is already up to date — no new components.";
+      const total = data.added.metric + data.added.dimension;
+      resultEl.textContent = total
+        ? "Synced " + label + ": " + data.added.metric + " new metrics and " + data.added.dimension + " new dimensions added to components-instances.ttl" +
+          (data.skipped ? " (" + data.skipped + " already existed and were left untouched)." : ".")
+        : "Synced " + label + ": nothing new — all " + data.total_pulled + " components already exist.";
     })
-    .catch(err => {
-      resultEl.textContent = "Could not reach the local API (" + err.message + ") — run `martech-knowledge-graph serve` to actually sync.";
-    });
-
-  const cfg = loadCjaConfig();
-  if (cfg) {
-    cfg.lastSync = { dataView: dvLabel, at: new Date().toISOString() };
-    saveCjaConfig(cfg);
-  }
+    .catch(err => { resultEl.textContent = "Sync failed: " + err.message; })
+    .finally(() => { button.disabled = false; });
 });
 
-refreshToolbarStatus();
+loadCjaConfig();
 loadLiveState();
 </script>
 <script src="js/mode-banner.js"></script>

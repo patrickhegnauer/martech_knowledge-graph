@@ -225,7 +225,7 @@ thing as an `xdm_base_url` argument.
 
 - ✅ Ontology, two example journeys, live graph view, and SPARQL querying — working, validated.
 - ✅ Structured authoring (spreadsheet or Python) for adding new journeys without hand-writing turtle — working, validated against the two existing journeys.
-- ✅ Web UI + local API (`martech-knowledge-graph serve`) — real persistence to the `.ttl` files, not just a demo: component context edits, CJA sync (simulated auth, real writes), and journey generation all round-trip through the actual data directory; the graph viewer and SPARQL query page read that same live state.
+- ✅ Web UI + local API (`martech-knowledge-graph serve`) — real persistence to the `.ttl` files, not just a demo: component context edits, CJA sync (real OAuth Server-to-Server + CJA API, real writes), and journey generation all round-trip through the actual data directory; the graph viewer and SPARQL query page read that same live state.
 - ✅ Installable as a package (`pip install git+<this-repo-url>` or `pip install -e .` from a clone) — no PyPI publish yet, git/local install only.
 - ✅ Demo/org mode switcher — every page shows which workspace is active and lets you switch between the
   bundled read-only demo data and your own data directory; Home becomes a live kickstart checklist once

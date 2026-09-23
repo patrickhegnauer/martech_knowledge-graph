@@ -98,50 +98,41 @@ No other vendor file needs to change unless the Oxigraph version is upgraded (in
 regenerating from the new `web_bg.wasm`). Like graph.html, query.html is a deliberate JS exception
 to the otherwise fully static, JS-free UI shell.
 
-## components.html — "Sync from CJA" is now a live simulated flow (no longer a WIRE point)
+## components.html — "Sync from CJA" calls the real CJA API
 
-`btn-sync-cja` no longer has a `<!-- WIRE -->` comment of its own; it now opens a real config/connect/sync
-modal (`#modal-cja-config`):
+`btn-sync-cja` opens the connect/sync modal (`#modal-cja-config`); everything goes through the local API,
+implemented in `cja_client.py` (stdlib `urllib`, no extra dependency) and the `/api/cja/*` routes in `server.py`.
 
-- **Config step** (`#cja-step-config`): a form for `client_id`, `client_secret`, `org_id`, and scope
-  checkboxes (`cja:components.read`, `cja:dataviews.read`, `cja:segments.read`). "Save & Connect"
-  validates all fields are present, then saves them to `localStorage` under `martechKG.cjaConfig` and
-  advances to the data view step. A banner in the modal is explicit that this is simulated (still no
-  real OAuth) and nothing here is ever transmitted — this part is unchanged by the persistence work below.
-- **Data view step** (`#cja-step-dataview`): shown immediately (skipping the config form) on every
-  subsequent open once a config exists — `#btn-cja-reconfigure` goes back to the config step,
-  `#btn-cja-disconnect` clears the stored config. `#cja-dataview-select` offers three mock data views
-  (`Production - Website`, `Production - Mobile App`, `Staging - Website`).
-- **Sync** (`#btn-cja-sync`): as of the persistence layer (see the `server.py` section below), this now
-  POSTs `{data_view_id}` to `POST /api/cja/sync` — a **real** network call, not a DOM-only simulation.
-  The server looks up the same mock pull table (now server-side, `CJA_MOCK_PULL` in `server.py`) and, if
-  the component doesn't already exist, writes it to `components-instances.ttl` on disk and returns the
-  refreshed component list, which re-renders `#table-components`. If the local API isn't running, the
-  fetch fails and the result area explains that `python server.py` needs to be started — it no longer
-  silently falls back to a DOM-only fake sync.
-- The toolbar's `#cja-connection-status` reflects connected/disconnected state on every page load and
-  after every connect/disconnect. `#live-mode-note` separately reports whether the component **table**
-  loaded from the local API (`GET /api/state`) or fell back to the five static example rows.
-- **Context coverage** (`#context-coverage-value`): a counter above the toolbar showing what fraction of
-  rows in `#table-components` carry the `badge-has-context` class, e.g. "60% (3 of 5)". Computed by
-  `updateContextCoverage()` on page load and again after every sync, so pulling in a new, not-yet-curated
-  component visibly drops the percentage — same idea as `index.html`'s static "Context coverage" counter,
-  but live and recalculated from the actual table instead of a hardcoded number. Once component context
-  editing (`component-edit.html`'s Save) is wired to a real store, this same function should be called
-  after every save too, not just after sync.
+- **Config step**: `client_id`, `client_secret`, `org_id`, scopes (comma-separated text, default
+  `openid,AdobeID,read_organizations,additional_info.projectedProductContext`). "Save & Connect" POSTs to
+  `/api/cja/config`, which first requests a real token from Adobe IMS (`client_credentials` grant); only if
+  that succeeds is the config written to `.mkg-cja.json` in the org data directory (chmod 600 where
+  supported). The secret never goes to the browser, `localStorage`, a `.ttl` file, or an `export-mcp`
+  snapshot (export only copies `*-instances.ttl`); `GET /api/cja/config` never returns it. Leaving the
+  secret empty on reconfigure keeps the saved one.
+- **Data view step**: `GET /api/cja/dataviews` (`GET {CJA}/data/dataviews`) fills `#cja-dataview-select`
+  with the data views the credential can see. Reconfigure / Disconnect (`DELETE /api/cja/config`).
+- **Sync**: `POST /api/cja/sync {data_view_id}` pulls `GET /data/dataviews/{id}/metrics` and
+  `/dimensions` (paginated with `limit`/`page`, tolerant of bare-list or `{"content": [...]}` responses),
+  and writes each *new* component to `components-instances.ttl` with label, `component_type` and a
+  `martech:refs` pointer `urn:cja:<dataViewId>:<cjaComponentId>` (shown as the "CJA Component ID" column).
+  Existing components are never overwritten: a component is skipped if its key or its CJA ref already
+  exists anywhere in the workspace, so re-syncing is idempotent and curated context is safe. A metric and
+  dimension with the same key get a `_metric`/`_dimension` suffix instead of colliding. New components
+  start with empty context, so context coverage shows what's left to curate.
+- Bearer tokens are cached in memory until shortly before expiry. Requests carry `Authorization`,
+  `x-api-key` and `x-gw-ims-org-id`. All CJA/IMS errors are surfaced as readable messages (HTTP 502 from the
+  local API), never including the secret.
+- **Context coverage** (`#context-coverage-value`) is recomputed after every sync from the table rows.
+- Table cells are built with `textContent` (real CJA names are untrusted input).
 
-Verified end-to-end (DOM + `localStorage` shim in Node): open with no config → config form shown;
-missing-field validation blocks connect; valid connect persists config, flips toolbar status, and shows
-the data view step; syncing a data view once adds exactly one new row; syncing the same data view again
-reports "already up to date" instead of duplicating the row; disconnect clears `localStorage` and reverts
-the toolbar status.
-
-**Wiring this to the real CJA Semantic Layer MCP later** means replacing two things: the "Save & Connect"
-handler (currently just validates + stores locally) with a real OAuth/token exchange against the MCP, and
-the `CJA_MOCK_PULL` lookup in "Sync" with an actual components-for-data-view call. The modal's shape
-(config step → data view step → sync) and every element ID stay the same, so only those two handlers need
-to change — this is why the `<!-- WIRE -->` comments on the config form and the data-view step were kept
-even though the surrounding modal is already live.
+**Verified** against a local fake IMS + CJA server driven through the Flask API (not against Adobe): bad
+secret is rejected and nothing is saved; good secret saves and never leaks the secret; data views list;
+sync writes 2 metrics + 2 dimensions, re-sync adds 0 (bug found and fixed here: the first version's
+collision rename wasn't idempotent and duplicated a dimension on re-sync); curated context survives a
+re-sync; correct auth headers and grant type sent. **Not yet verified against the real Adobe endpoints**:
+the exact scopes, the IMS token URL region, and the metrics/dimensions response fields were written from
+Adobe's docs and memory; expect to adjust on first real run.
 
 ## ontology.html — new page, fully static
 

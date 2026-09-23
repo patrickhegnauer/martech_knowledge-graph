@@ -39,6 +39,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from . import graph_explorer as ge
 from . import journey_builder as jb
+from . import cja_client
 from .workspace import MODE_MARKER_NAME
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -47,29 +48,18 @@ EXAMPLES_DIR = PACKAGE_DIR / "examples"
 UI_DIR = PACKAGE_DIR / "ui"
 MARTECH = ge.MARTECH
 
-# Stand-in for what a real CJA Semantic Layer MCP pull would return for each
-# data view -- mirrors the mock pull table that used to live only in
-# components.html's inline script.
-CJA_DATA_VIEWS = {
-    "dv_prod_web": "Production - Website",
-    "dv_prod_app": "Production - Mobile App",
-    "dv_staging_web": "Staging - Website",
-}
-CJA_MOCK_PULL = {
-    "dv_prod_web": {"key": "cart_removes", "name": "Cart removes", "type": "metric"},
-    "dv_prod_app": {"key": "app_session_starts", "name": "App session starts", "type": "metric"},
-    "dv_staging_web": {"key": "page_name_staging", "name": "Page name (staging)", "type": "dimension"},
-}
-
-
 def to_camel(key):
     parts = key.split("_")
     return parts[0] + "".join(p.capitalize() for p in parts[1:])
 
 
-def mock_cja_component_id(key, ctype):
+def cja_component_id(key, ctype, refs):
+    """The real CJA id if the component was synced (recorded as a urn:cja: ref), else a derived one."""
+    for ref in refs:
+        if ref.startswith(CJA_URN_PREFIX):
+            return ref[len(CJA_URN_PREFIX):].split(":", 1)[-1]
     kind = "metrics" if ctype == "metric" else "dimensions"
-    return f"cja:{kind}/{to_camel(key)}"
+    return f"{kind}/{to_camel(key)}"
 
 
 def component_key_from_subject(subject):
@@ -78,6 +68,8 @@ def component_key_from_subject(subject):
 
 
 SETTINGS_MARKER_NAME = ".mkg-settings.json"
+CJA_CONFIG_NAME = ".mkg-cja.json"
+CJA_URN_PREFIX = "urn:cja:"
 
 
 def create_app(data_dir: Path) -> Flask:
@@ -161,7 +153,7 @@ def create_app(data_dir: Path) -> Flask:
             "key": key,
             "name": label,
             "type": ctype,
-            "cja_id": mock_cja_component_id(key, ctype),
+            "cja_id": cja_component_id(key, ctype, [str(o) for o in merged_graph.objects(subject, MARTECH.refs)]),
             "owner": str(owner) if owner else "",
             "has_context": has_context,
         }
@@ -258,7 +250,7 @@ def create_app(data_dir: Path) -> Flask:
             "key": key,
             "name": str(g.value(s, RDFS.label) or key),
             "type": ctype,
-            "cja_id": mock_cja_component_id(key, ctype),
+            "cja_id": cja_component_id(key, ctype, refs),
             "definition": str(definition) if definition else "",
             "caveats": str(caveats) if caveats else "",
             "context": str(context) if context else "",
@@ -306,49 +298,150 @@ def create_app(data_dir: Path) -> Flask:
 
         return jsonify({"ok": True, "turtle": turtle_snippet})
 
+    cja_config_path = data_dir / CJA_CONFIG_NAME
+    cja_clients = {}
+
+    def load_cja_config():
+        try:
+            return json.loads(cja_config_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+
+    def get_cja_client():
+        cfg = load_cja_config()
+        if not cfg:
+            return None
+        cache_key = (cfg["client_id"], cfg["client_secret"], cfg["org_id"], cfg["scopes"])
+        if cache_key not in cja_clients:
+            cja_clients.clear()
+            cja_clients[cache_key] = cja_client.CjaClient(*cache_key)
+        return cja_clients[cache_key]
+
+    @app.route("/api/cja/config", methods=["GET"])
+    def api_get_cja_config():
+        cfg = load_cja_config()
+        if not cfg:
+            return jsonify({"configured": False, "scopes": cja_client.DEFAULT_SCOPES})
+        return jsonify({
+            "configured": True, "client_id": cfg["client_id"], "org_id": cfg["org_id"], "scopes": cfg["scopes"],
+        })
+
+    @app.route("/api/cja/config", methods=["POST"])
+    def api_save_cja_config():
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+
+        body = request.get_json(force=True)
+        existing = load_cja_config() or {}
+        cfg = {
+            "client_id": (body.get("client_id") or "").strip(),
+            "client_secret": (body.get("client_secret") or "").strip() or existing.get("client_secret", ""),
+            "org_id": (body.get("org_id") or "").strip(),
+            "scopes": (body.get("scopes") or "").strip() or cja_client.DEFAULT_SCOPES,
+        }
+        if not (cfg["client_id"] and cfg["client_secret"] and cfg["org_id"]):
+            return jsonify({"error": "Client ID, client secret and organization ID are required."}), 400
+
+        try:
+            cja_client.CjaClient(**cfg).token()
+        except cja_client.CjaError as exc:
+            return jsonify({"error": f"Could not get a token: {exc}"}), 400
+
+        data_dir.mkdir(parents=True, exist_ok=True)
+        cja_config_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+        try:
+            cja_config_path.chmod(0o600)
+        except OSError:
+            pass
+        return jsonify({"ok": True, "org_id": cfg["org_id"]})
+
+    @app.route("/api/cja/config", methods=["DELETE"])
+    def api_delete_cja_config():
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+        cja_config_path.unlink(missing_ok=True)
+        cja_clients.clear()
+        return jsonify({"ok": True})
+
+    @app.route("/api/cja/dataviews", methods=["GET"])
+    def api_cja_dataviews():
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+        client = get_cja_client()
+        if client is None:
+            return jsonify({"error": "CJA is not configured yet."}), 400
+        try:
+            return jsonify({"data_views": client.list_data_views()})
+        except cja_client.CjaError as exc:
+            return jsonify({"error": str(exc)}), 502
+
     @app.route("/api/cja/sync", methods=["POST"])
     def api_cja_sync():
         blocked = require_org_mode()
         if blocked:
             return blocked
 
-        body = request.get_json(force=True)
-        dv_id = body.get("data_view_id")
-        if dv_id not in CJA_DATA_VIEWS:
-            return jsonify({"error": f"unknown data_view_id '{dv_id}'"}), 400
+        dv_id = (request.get_json(force=True) or {}).get("data_view_id")
+        client = get_cja_client()
+        if client is None:
+            return jsonify({"error": "CJA is not configured yet."}), 400
+        if not dv_id:
+            return jsonify({"error": "data_view_id is required"}), 400
 
-        pull = CJA_MOCK_PULL[dv_id]
-        _, _, existing = find_component_file(pull["key"])
-        if existing is not None:
-            return jsonify({"added": False, "data_view": CJA_DATA_VIEWS[dv_id], "state": collect_state()})
+        try:
+            pulled = client.list_components(dv_id)
+        except cja_client.CjaError as exc:
+            return jsonify({"error": str(exc)}), 502
+
+        known_types, known_refs = {}, set()
+        for fg in load_instance_file_graphs().values():
+            for subj in fg.subjects(RDF.type, MARTECH.Component):
+                known_types[component_key_from_subject(subj)] = str(fg.value(subj, MARTECH.component_type) or "")
+                known_refs.update(str(o) for o in fg.objects(subj, MARTECH.refs))
 
         sync_file = cja_sync_file()
         cja_ns = Namespace("https://example.org/martech/data/cja_sync/")
+        g = rdflib.Graph()
         if sync_file.exists():
-            g = rdflib.Graph()
             g.parse(sync_file, format="turtle")
-        else:
-            g = rdflib.Graph()
         g.bind("martech", ge.MARTECH)
         g.bind("data", cja_ns)
         g.bind("rdfs", RDFS)
 
-        subject = cja_ns["component_" + pull["key"]]
-        g.add((subject, RDF.type, MARTECH.Component))
-        g.add((subject, RDFS.label, rdflib.Literal(pull["name"])))
-        g.add((subject, MARTECH.component_type, rdflib.Literal(pull["type"])))
+        added = {"metric": 0, "dimension": 0}
+        skipped = 0
+        for comp in pulled:
+            ref = f"{CJA_URN_PREFIX}{dv_id}:{comp['id']}"
+            key = cja_client.component_key(comp["id"])
+            if key in known_types and known_types[key] != comp["type"]:
+                key += "_" + comp["type"]
+            if ref in known_refs or key in known_types:
+                skipped += 1
+                continue
+            known_types[key] = comp["type"]
+            known_refs.add(ref)
+            subject = cja_ns["component_" + key]
+            g.add((subject, RDF.type, MARTECH.Component))
+            g.add((subject, RDFS.label, rdflib.Literal(comp["name"])))
+            g.add((subject, MARTECH.component_type, rdflib.Literal(comp["type"])))
+            g.add((subject, MARTECH.refs, rdflib.URIRef(ref)))
+            added[comp["type"]] += 1
 
-        header = (
-            "# ==========================================================================\n"
-            "# Components synced from CJA, not yet bound to any journey.\n"
-            "# Written by the local API's /api/cja/sync -- context still needs curating\n"
-            "# via component-edit.html before this component is useful in the graph.\n"
-            "# ==========================================================================\n\n"
-        )
-        sync_file.write_text(header + g.serialize(format="turtle"), encoding="utf-8")
+        if sum(added.values()):
+            header = (
+                "# ==========================================================================\n"
+                "# Components synced from CJA, not yet bound to any journey.\n"
+                "# Written by the local API's /api/cja/sync -- context still needs curating\n"
+                "# via component-edit.html before this component is useful in the graph.\n"
+                "# ==========================================================================\n\n"
+            )
+            sync_file.write_text(header + g.serialize(format="turtle"), encoding="utf-8")
 
         return jsonify({
-            "added": True, "data_view": CJA_DATA_VIEWS[dv_id], "component": pull, "state": collect_state(),
+            "added": added, "skipped": skipped, "total_pulled": len(pulled), "state": collect_state(),
         })
 
     @app.route("/api/journeys/generate", methods=["POST"])
