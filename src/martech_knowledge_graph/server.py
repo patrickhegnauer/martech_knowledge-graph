@@ -39,6 +39,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from . import graph_explorer as ge
 from . import journey_builder as jb
+from .workspace import MODE_MARKER_NAME
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 ONTOLOGY_FILE = PACKAGE_DIR / "ontology" / "martech-ontology.ttl"
@@ -76,7 +77,6 @@ def component_key_from_subject(subject):
     return local[len("component_"):] if local.startswith("component_") else local
 
 
-MODE_MARKER_NAME = ".mkg-mode"
 SETTINGS_MARKER_NAME = ".mkg-settings.json"
 
 

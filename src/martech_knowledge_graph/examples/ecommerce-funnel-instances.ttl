@@ -46,7 +46,7 @@ data:component_checkouts a martech:Component ;
     martech:caveats "Counts checkout starts, not completions — a user can start checkout multiple times without purchasing." ;
     martech:component_type "metric" ;
     martech:context "Marks the transition from browsing to transactional intent." ;
-    martech:definition "Number of times a user started the checkout process!" ;
+    martech:definition "Number of times a user started the checkout process." ;
     martech:owner "Digital Analytics" ;
     martech:refs <https://sandbox/SANDBOX_NAME/xdm/commerce.checkouts.value> .
 

@@ -114,3 +114,34 @@ def extract_full_graph(g):
                     edges.append({"from": str(inst), "to": str(o), "label": pred})
 
     return {"nodes": nodes, "edges": edges}
+
+
+def extract_ontology_schema(g):
+    """
+    Programmatic version of what's hand-written into ui/ontology.html: every
+    rdfs:Class and rdf:Property in the graph, with their comment and (for
+    properties) domain/range -- so a caller (e.g. the MCP server's
+    get_ontology_schema tool) always reflects the real ontology file instead
+    of a description that can drift out of sync with it.
+    """
+    classes = []
+    for s in sorted(g.subjects(RDF.type, RDFS.Class), key=_local_name):
+        comment = g.value(s, RDFS.comment)
+        classes.append({
+            "name": _local_name(s),
+            "comment": str(comment) if comment else None,
+        })
+
+    properties = []
+    for s in sorted(g.subjects(RDF.type, RDF.Property), key=_local_name):
+        comment = g.value(s, RDFS.comment)
+        domain = g.value(s, RDFS.domain)
+        range_ = g.value(s, RDFS.range)
+        properties.append({
+            "name": _local_name(s),
+            "domain": _local_name(domain) if domain else None,
+            "range": _local_name(range_) if range_ else None,
+            "comment": str(comment) if comment else None,
+        })
+
+    return {"classes": classes, "properties": properties}

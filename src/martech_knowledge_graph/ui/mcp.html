@@ -24,9 +24,13 @@
 </nav>
 <main>
   <section>
-    <div class="status-banner">Not built yet — built last. The MCP is deployed only after the authoring loop (pull → context → journeys → graph → query) is trusted.</div>
+    <div class="status-banner">Built — run it from a terminal. There's no one-click "start" button on this page yet (that's a deliberate next step, not a gap); until then, the CLI is the real, working way to run it.</div>
 
-    <h2>Planned tool set</h2>
+    <h3>Run it</h3>
+    <pre class="code-block">martech-knowledge-graph mcp</pre>
+    <p class="note">Reads the same <code>--data-dir</code> and demo/org mode <code>martech-knowledge-graph serve</code> uses (shares its <code>.mkg-mode</code> file) — switching workspaces in the browser is reflected on the MCP server's very next tool call, no restart needed. By default it prints and serves at <code>http://127.0.0.1:8931/mcp</code> — point any MCP-compatible client (Claude, an agent framework, etc.) at that URL.</p>
+
+    <h2>Tool set</h2>
     <p>Single-doorway principle: one query interface, not multiple competing tools.</p>
     <div class="table-scroll">
 
@@ -37,24 +41,25 @@
         <tbody>
           <tr data-tool-name="run_sparql">
             <td><code>run_sparql</code></td>
-            <td>Execute a SPARQL query against the flat .ttl files and return results.</td>
+            <td>Runs a <strong>read-only</strong> SPARQL query (SELECT / ASK / CONSTRUCT / DESCRIBE) against the currently active workspace's graph. Write forms (INSERT/DELETE) aren't filtered out — they simply fail to parse against rdflib's read-only query grammar, so there's no separate check that could have a gap in it.</td>
           </tr>
           <tr data-tool-name="get_ontology_schema">
             <td><code>get_ontology_schema</code></td>
-            <td>Documentation/ontology tool — returns the classes and properties available to query against.</td>
+            <td>Returns every class and property in the ontology — name, comment, and (for properties) domain/range — extracted live from <code>martech-ontology.ttl</code>, so it can't drift out of sync with the real schema. Meant to be called before <code>run_sparql</code> by a caller that doesn't already know the graph's shape.</td>
           </tr>
         </tbody>
       </table>
 
     </div>
-    <!-- WIRE: expose these two tools over MCP | reuses: run_sparql pattern (conceptual, from platform-mvp-handoff.md), martech-ontology.ttl -->
 
-    <h2>Endpoint</h2>
+    <h2>Security posture</h2>
     <div class="panel">
-      <p id="endpoint-placeholder">MCP endpoint: not yet deployed</p>
-      <p><span class="badge badge-not-deployed">Not deployed</span></p>
+      <p>No authentication yet — the server binds to <code>127.0.0.1</code> only by default, matching every other part of this tool's local-first trust model (same as <code>martech-knowledge-graph serve</code>). Reachable only from the machine it runs on unless you deliberately pass <code>--host</code> to change that.</p>
+      <p><span class="badge badge-has-context">Read-only</span> <span class="badge badge-has-context">Localhost by default</span></p>
     </div>
-    <!-- WIRE: show live endpoint URL and deployment status once the MCP exists | reuses: future MCP server -->
+
+    <h2>Not built yet</h2>
+    <p class="note">A "Generate MCP" button on this page that starts the server as a background process and shows you the URL here, instead of running the CLI command yourself. The CLI command above is the real, fully-working path in the meantime.</p>
   </section>
 </main>
 <footer class="site-footer">Static content — the only script on this page is the shared demo/org mode banner (js/mode-banner.js).</footer>

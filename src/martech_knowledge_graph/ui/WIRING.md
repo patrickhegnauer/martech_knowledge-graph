@@ -321,3 +321,70 @@ switched to org mode, saved a custom base URL, confirmed it was normalized and p
 `.mkg-settings.json`; generated a journey afterward and confirmed its `refs` used the custom prefix;
 exercised `journeys.html`'s panel against the real served page — initial load, live example update while
 typing, save, and the demo-mode-blocked error message all correct.
+
+## MCP server: `martech-knowledge-graph mcp` (new)
+
+The piece the original handoff doc sequenced last, built now that the authoring loop is trusted. Runs as
+a **second, independent process** alongside `server.py` — Flask is WSGI, FastMCP's HTTP transport is
+ASGI, so mixing them in one process would fight both frameworks for no real benefit. `mcp.html` documents
+this; it's CLI-only for now (`martech-knowledge-graph mcp`), no page button yet.
+
+- **New file `workspace.py`**: `MODE_MARKER_NAME` and `resolve_active_dir(data_dir, examples_dir)`,
+  factored out of `server.py` so both processes agree on the demo/org marker filename without duplicating
+  it. `server.py`'s `create_app()` now imports `MODE_MARKER_NAME` from here instead of defining its own
+  copy — its `current_dir()` closure otherwise unchanged, still caching the mode in memory for the life
+  of the Flask process (correct for a long-lived request server). `mcp_server.py` calls
+  `resolve_active_dir()` fresh on every tool call instead — it has no request loop to invalidate a cache
+  in, and re-reading one small marker file per call is negligible cost. This is why switching modes in
+  the browser reaches an *already-running* MCP process immediately, with no restart — verified below.
+- **New addition to `graph_explorer.py`**: `extract_ontology_schema(g)` — walks the loaded graph for
+  `rdfs:Class`/`rdf:Property` subjects and returns `{classes: [...], properties: [...]}` with names,
+  comments, and (for properties) domain/range. Programmatic version of what's hand-written into
+  `ontology.html`, so the MCP tool's schema can't drift from the real ontology file. Confirmed it returns
+  exactly 9 classes / 24 properties, matching `ontology.html`'s hand-written counts.
+- **New file `mcp_server.py`**: `create_mcp(data_dir)` builds a `FastMCP` instance with two tools —
+  `run_sparql(query)` and `get_ontology_schema()` — both loading a fresh graph via
+  `ge.load_graph(ontology_path=ge.ONTOLOGY_FILE, script_dir=resolve_active_dir(...))` on every call (no
+  caching, matching how `/api/graph-data`/`/api/ttl-bundle` already reload per request).
+  - **Read-only by construction, not by filtering**: only `Graph.query()` is called, never
+    `Graph.update()`. Verified empirically before relying on it —
+    `graph.query("DELETE DATA { ... }")` and `INSERT DATA { ... }` both raise `ParseException` rather
+    than executing (rdflib's `.query()` parses against the SPARQL *Query* grammar only), confirmed the
+    graph's triple count is unchanged afterward.
+  - **Result serialization bug found and fixed during testing**: MCP's `structuredContent` must be a JSON
+    *object*, not a bare array or bool. A first version returning a plain `list`/`bool` from `run_sparql`
+    left `result.data` `None` client-side (the actual JSON was still present as `TextContent`, just not
+    structured) — confirmed via `fastmcp`'s own `Client`, not assumed. Fixed by wrapping every branch in
+    an object: `{"results": [...]}` for SELECT/CONSTRUCT/DESCRIBE, `{"result": true|false}` for ASK,
+    `{"error": "..."}` on failure. Also had to branch on `SPARQLResult.type` (`"SELECT"`/`"ASK"`/etc.)
+    rather than `isinstance(results, bool)` for ASK — rdflib's ASK result is a `SPARQLResult` object that
+    is merely bool-*like* (truthy, one-item-iterable), not an actual `bool` instance.
+- **`cli.py`**: new `mcp` subcommand, same shape as `serve` (`--data-dir`, `--host` default `127.0.0.1`,
+  `--port` default `8931`). Prints the data directory and the resulting `http://host:port/mcp` URL
+  (`path="/mcp"` passed explicitly rather than relying on FastMCP's version-dependent default) before
+  calling `mcp.run(transport="http", ...)`. `mcp_server` is imported lazily inside the subcommand branch
+  so `serve` doesn't pay for FastMCP's heavier import graph.
+- **`pyproject.toml`**: added `fastmcp` to `dependencies` — a materially heavier dependency than the
+  previous `rdflib` + `flask` (pulls in the official `mcp` SDK, `uvicorn`, `starlette`), expected and
+  necessary for the feature.
+- **`mcp.html`**: replaced the "Not built yet — built last" banner and "Not deployed" badge with the real
+  CLI command, the actual tool descriptions, and the no-auth/localhost-only security posture. Still no JS
+  beyond the shared `mode-banner.js` — this page describes something you start from a terminal, not
+  something it controls itself yet (the one-click button stays a documented, deliberate gap).
+
+**Verified this session**, against a real running server (not mocked), using `fastmcp`'s own Python
+`Client` to actually call the tools over HTTP rather than calling the Python functions directly: both
+tools return correct data against the demo workspace (`get_ontology_schema` → 9 classes/24 properties;
+`run_sparql`'s SELECT reproduces the same 5-row component-context result the web UI's Query page has
+always returned); ASK and CONSTRUCT query forms both serialize correctly; a `DELETE DATA` attempt returns
+a clean `{"error": "ParseException: ..."}` instead of a crash or a silent write. Cross-process mode
+sync verified end-to-end: started `serve` and `mcp` against the same `--data-dir`, switched to org mode
+via `POST /api/mode`, and confirmed the *already-running* MCP process's next `run_sparql` call reflected
+the new (empty) workspace with no restart; synced a real component via `/api/cja/sync` and confirmed the
+MCP server's next call saw it immediately. Confirmed via `netstat` that the server listens on
+`127.0.0.1:8931` only, not `0.0.0.0`.
+
+**Incidental finding, fixed**: while testing, noticed the bundled `examples/ecommerce-funnel-instances.ttl`
+had a stray `"...checkout process!"` (exclamation mark) instead of the intended period — a leftover edit
+from early testing, before the demo/org workspace split existed, that had already made it into the
+published repo. Fixed; scanned both bundled example files for any other similar artifacts (none found).
