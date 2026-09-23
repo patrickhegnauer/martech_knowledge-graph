@@ -49,6 +49,20 @@ def main():
         help="Only used for --transport http. Default: %(default)s",
     )
 
+    export_parser = subparsers.add_parser(
+        "export-mcp",
+        help="Write a self-contained folder you can push to GitHub and deploy on Prefect Horizon.",
+    )
+    export_parser.add_argument("--out", required=True, help="Output folder (created if missing).")
+    export_parser.add_argument(
+        "--data-dir", default="./martech-knowledge-graph-data",
+        help="Org workspace to snapshot. Default: %(default)s",
+    )
+    export_parser.add_argument(
+        "--demo", action="store_true", help="Export the bundled demo data instead (for a test deploy)."
+    )
+    export_parser.add_argument("--name", default="martech-knowledge-graph", help="Title used in the README.")
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -58,6 +72,17 @@ def main():
         print(f"Data directory: {data_dir}")
         print(f"Serving on http://{args.host}:{args.port}/")
         app.run(host=args.host, port=args.port, debug=args.debug)
+
+    elif args.command == "export-mcp":
+        from . import export, graph_explorer
+
+        source = graph_explorer.EXAMPLES_DIR if args.demo else Path(args.data_dir).resolve()
+        out = Path(args.out).resolve()
+        out.mkdir(parents=True, exist_ok=True)
+        count = export.export_mcp_project(out, source, args.name)
+        print(f"Exported {count} data file(s) from {source} to {out}")
+        print("Next: push that folder to a PRIVATE GitHub repo and deploy it on Prefect Horizon "
+              f"(entrypoint server.py:mcp). See {out / 'README.md'}")
 
     elif args.command == "mcp":
         from . import mcp_server

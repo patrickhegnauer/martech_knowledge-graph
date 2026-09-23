@@ -138,6 +138,13 @@ pick based on your client:
   (macOS/Linux) in the terminal you installed it from. Restart Claude Desktop after editing. No
   `--host`/`--port` in this mode — Claude Desktop owns the process directly.
 
+- **Hosted (Prefect Horizon)** — `martech-knowledge-graph export-mcp --out ./my-mcp` writes a
+  self-contained folder (`server.py`, a snapshot of your `*-instances.ttl` in `data/`, `requirements.txt`,
+  a README with the steps). Push it to your own **private** GitHub repo and deploy it on
+  [Horizon](https://horizon.prefect.io) (entrypoint `server.py:mcp`, free personal tier, OAuth built in) to
+  get a `https://<name>.fastmcp.app/mcp` URL. This project hosts nothing; each org deploys its own. The data
+  is a snapshot: re-export and push to update. `--demo` exports the bundled demo data for a test deploy.
+
 Two tools, per the original handoff doc's "single doorway" principle:
 
 - **`run_sparql(query)`** — read-only (SELECT/ASK/CONSTRUCT/DESCRIBE only). This isn't enforced by

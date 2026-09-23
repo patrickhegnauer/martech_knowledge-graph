@@ -44,6 +44,10 @@
 }</pre>
     <p class="note">Find your own <code>martech-knowledge-graph.exe</code> path by running <code>where martech-knowledge-graph</code> (Windows) or <code>which martech-knowledge-graph</code> (macOS/Linux) in the same terminal you installed it from. Restart Claude Desktop after editing the config. No URL, no <code>--host</code>/<code>--port</code> — Claude Desktop spawns and owns the process directly.</p>
 
+    <h3>Publish to Prefect Horizon (hosted URL)</h3>
+    <pre class="code-block">martech-knowledge-graph export-mcp --out ./my-mcp</pre>
+    <p class="note">Writes a self-contained folder (entrypoint, a snapshot of your data, requirements, step-by-step README). Push it to your own <strong>private</strong> GitHub repo and deploy it on Horizon with entrypoint <code>server.py:mcp</code> to get a <code>https://&lt;name&gt;.fastmcp.app/mcp</code> URL. Re-run and push to refresh the snapshot.</p>
+
     <h2>Tool set</h2>
     <p>Single-doorway principle: one query interface, not multiple competing tools.</p>
     <div class="table-scroll">
