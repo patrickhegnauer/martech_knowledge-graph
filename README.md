@@ -115,9 +115,30 @@ martech-knowledge-graph serve --data-dir ./my-data --host 127.0.0.1 --port 8080
 martech-knowledge-graph mcp
 ```
 
-Exposes the graph to LLMs/agents over MCP (built with [FastMCP](https://gofastmcp.com), Streamable HTTP
-transport) at `http://127.0.0.1:8931/mcp` by default — point any MCP-compatible client at that URL. Two
-tools, per the original handoff doc's "single doorway" principle:
+Exposes the graph to LLMs/agents over MCP (built with [FastMCP](https://gofastmcp.com)). Two transports,
+pick based on your client:
+
+- **`--transport http`** (the default, shown above) — a persistent server at `http://127.0.0.1:8931/mcp`
+  by default. Use this for anything that connects over the network: claude.ai's Custom Connectors, a
+  remote agent framework, a coworker on another machine.
+- **`--transport stdio`** — for a client that spawns the process itself from a local config file, no URL
+  involved. This is how **Claude Desktop's** "Local MCP Servers" config works. Add to
+  `claude_desktop_config.json`:
+  ```json
+  {
+    "mcpServers": {
+      "martech-knowledge-graph": {
+        "command": "C:\\path\\to\\python\\Scripts\\martech-knowledge-graph.exe",
+        "args": ["mcp", "--transport", "stdio", "--data-dir", "C:\\path\\to\\your\\martech-knowledge-graph-data"]
+      }
+    }
+  }
+  ```
+  Find the exact path with `where martech-knowledge-graph` (Windows) / `which martech-knowledge-graph`
+  (macOS/Linux) in the terminal you installed it from. Restart Claude Desktop after editing. No
+  `--host`/`--port` in this mode — Claude Desktop owns the process directly.
+
+Two tools, per the original handoff doc's "single doorway" principle:
 
 - **`run_sparql(query)`** — read-only (SELECT/ASK/CONSTRUCT/DESCRIBE only). This isn't enforced by
   filtering the query text: only `rdflib.Graph.query()` is ever called, never `.query()`'s write
@@ -204,10 +225,11 @@ thing as an `xdm_base_url` argument.
   you're on your own (typically empty) data.
 - ✅ Configurable XDM base URL for generated component refs — set your org's real prefix once (Journeys
   page) instead of the `SANDBOX_NAME` placeholder ending up in every generated file.
-- ✅ MCP server (`martech-knowledge-graph mcp`) — `run_sparql` + `get_ontology_schema` over Streamable
-  HTTP via FastMCP, read-only by construction, sharing the same workspace/mode as the web UI. Not yet
-  tested for whether it actually improves an agent's answer quality — that's a separate question from
-  "does it work."
+- ✅ MCP server (`martech-knowledge-graph mcp`) — `run_sparql` + `get_ontology_schema` via FastMCP,
+  read-only by construction, sharing the same workspace/mode as the web UI. Both transports verified
+  end-to-end: `--transport http` (Streamable HTTP, for network clients/Connectors) and `--transport stdio`
+  (for Claude Desktop's local server config). Not yet tested for whether it actually improves an agent's
+  answer quality — that's a separate question from "does it work."
 - ⏳ Not yet built: a one-click "Generate MCP" button on the web UI (the CLI command above is fully
   working in the meantime) and any authentication on the MCP endpoint (currently localhost-only by
   default, no auth).

@@ -388,3 +388,38 @@ MCP server's next call saw it immediately. Confirmed via `netstat` that the serv
 had a stray `"...checkout process!"` (exclamation mark) instead of the intended period — a leftover edit
 from early testing, before the demo/org workspace split existed, that had already made it into the
 published repo. Fixed; scanned both bundled example files for any other similar artifacts (none found).
+
+## MCP server: stdio transport (new)
+
+Added `--transport {http,stdio}` to the `mcp` subcommand. `http` (default) is unchanged. `stdio` is for a
+client that spawns the process itself from a local config file rather than connecting to a URL — this is
+how **Claude Desktop's** "Local MCP Servers" mechanism works (distinct from its Custom Connectors/remote
+URL field, which claude.ai web also uses and which requires `http`).
+
+- **`cli.py`**: in `stdio` mode, status output goes to `sys.stderr` (not `stdout`) with `flush=True`,
+  and `mcp.run(transport="stdio", show_banner=False)` is called instead of the HTTP branch — stdio *is*
+  the protocol channel, so anything printed to stdout would corrupt it. `--host`/`--port` are ignored in
+  this mode (documented in `--help`, not silently dropped).
+- **`mcp.html` / `README.md`**: document both transports and give the exact `claude_desktop_config.json`
+  block (`command` = full path to the installed `martech-knowledge-graph.exe`, `args` = `["mcp",
+  "--transport", "stdio", "--data-dir", ...]`), with instructions for finding that path via `where`/`which`.
+
+**Debugging note, for future reference**: initial testing (spawning via `fastmcp`'s `StdioTransport`,
+which mimics how a real client like Claude Desktop spawns the process) failed with `ModuleNotFoundError:
+No module named 'martech_knowledge_graph'`. First hypothesis — that the MCP stdio spec's convention of a
+minimal/stripped subprocess environment was breaking the editable install's module resolution — turned
+out to be a red herring; a controlled test with a `PATH`+`SYSTEMROOT`-only environment reproduced the
+failure, but so did a *completely normal, unstripped* environment. The real cause: a leftover
+`~artech_knowledge_graph-0.1.0.dist-info` directory in site-packages (the literal `~`-prefixed name pip
+uses mid-uninstall, left behind by an interrupted uninstall from earlier testing) was shadowing the real
+install, and a stale `martech-knowledge-graph.exe mcp` process from earlier testing was file-locking the
+console script, so `pip install -e .` couldn't even rewrite it cleanly. Fixed by killing the stale
+process, removing the corrupted dist-info directory, and reinstalling (`pip install -e .`) — confirmed
+the minimal-environment test that originally reproduced the symptom now passes, isolating the actual root
+cause rather than stopping at the first plausible-looking one.
+
+**Verified this session**: `fastmcp.Client` + `StdioTransport` spawning `python -m
+martech_knowledge_graph.cli mcp --transport stdio --data-dir ...` — tool list, `get_ontology_schema` (9
+classes/24 properties), `run_sparql` SELECT (`COUNT(*)` matches the known 238-triple demo graph), ASK, and
+a `DELETE DATA` attempt returning a clean `{"error": "ParseException: ..."}` — same checks as the HTTP
+transport verification above, all passing over stdio.

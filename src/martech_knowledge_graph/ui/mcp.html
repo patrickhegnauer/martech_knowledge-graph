@@ -30,6 +30,20 @@
     <pre class="code-block">martech-knowledge-graph mcp</pre>
     <p class="note">Reads the same <code>--data-dir</code> and demo/org mode <code>martech-knowledge-graph serve</code> uses (shares its <code>.mkg-mode</code> file) — switching workspaces in the browser is reflected on the MCP server's very next tool call, no restart needed. By default it prints and serves at <code>http://127.0.0.1:8931/mcp</code> — point any MCP-compatible client (Claude, an agent framework, etc.) at that URL.</p>
 
+    <h3>Two transports — pick based on your client</h3>
+    <p class="note"><code>--transport http</code> (the default, shown above) runs a persistent server at a URL — use this for anything that connects over the network: claude.ai's Custom Connectors, a coworker on another machine, an agent framework. <code>--transport stdio</code> is for a client that spawns the process itself from a local config file, with no URL involved — this is how <strong>Claude Desktop's</strong> "Local MCP Servers" config works.</p>
+
+    <p class="note">For Claude Desktop, add this to <code>claude_desktop_config.json</code> (Settings → Developer → Edit Config), using the full path to the installed console script so it resolves regardless of Claude Desktop's own PATH:</p>
+    <pre class="code-block">{
+  "mcpServers": {
+    "martech-knowledge-graph": {
+      "command": "C:\\path\\to\\python\\Scripts\\martech-knowledge-graph.exe",
+      "args": ["mcp", "--transport", "stdio", "--data-dir", "C:\\path\\to\\your\\martech-knowledge-graph-data"]
+    }
+  }
+}</pre>
+    <p class="note">Find your own <code>martech-knowledge-graph.exe</code> path by running <code>where martech-knowledge-graph</code> (Windows) or <code>which martech-knowledge-graph</code> (macOS/Linux) in the same terminal you installed it from. Restart Claude Desktop after editing the config. No URL, no <code>--host</code>/<code>--port</code> — Claude Desktop spawns and owns the process directly.</p>
+
     <h2>Tool set</h2>
     <p>Single-doorway principle: one query interface, not multiple competing tools.</p>
     <div class="table-scroll">
