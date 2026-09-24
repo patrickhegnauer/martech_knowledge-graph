@@ -29,6 +29,7 @@ Run via the CLI:
 import csv
 import io
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -70,6 +71,8 @@ def component_key_from_subject(subject):
 SETTINGS_MARKER_NAME = ".mkg-settings.json"
 CJA_CONFIG_NAME = ".mkg-cja.json"
 CJA_URN_PREFIX = "urn:cja:"
+DLV_FILE_NAME = "datalayer-instances.ttl"
+DLV_NS = Namespace("https://example.org/martech/data/datalayer/")
 
 
 def create_app(data_dir: Path) -> Flask:
@@ -131,6 +134,96 @@ def create_app(data_dir: Path) -> Flask:
             graphs[path] = g
         return graphs
 
+    def dlv_file_path():
+        return current_dir() / DLV_FILE_NAME
+
+    def merged_instances():
+        merged = rdflib.Graph()
+        for fg in load_instance_file_graphs().values():
+            merged += fg
+        return merged
+
+    def data_layer_variables_of(component):
+        """[{name, source_system, editable}] for every DataLayerVariable mapped to this component.
+
+        editable == the mapping lives in datalayer-instances.ttl (managed from the edit page); mappings that
+        come from a generated journey file are shown read-only so regenerating a journey stays the only way
+        to change those."""
+        graphs = load_instance_file_graphs()
+        merged = rdflib.Graph()
+        for fg in graphs.values():
+            merged += fg
+        found = {}
+        for path, fg in graphs.items():
+            for d in fg.subjects(MARTECH.maps_to, component):
+                entry = found.setdefault(d, {"editable": False})
+                entry["editable"] = entry["editable"] or path.name == DLV_FILE_NAME
+        rows = []
+        for d, entry in found.items():
+            source = merged.value(d, MARTECH.source_system)
+            rows.append({
+                "name": str(merged.value(d, RDFS.label) or ge._local_name(d)),
+                "source_system": str(source) if source else "",
+                "editable": entry["editable"],
+            })
+        return sorted(rows, key=lambda r: r["name"].lower())
+
+    def save_data_layer_variables(component, rows):
+        """Replace this component's mappings in datalayer-instances.ttl (never touches journey files)."""
+        path = dlv_file_path()
+        dg = rdflib.Graph()
+        if path.exists():
+            dg.parse(path, format="turtle")
+        dg.bind("martech", ge.MARTECH)
+        dg.bind("data", DLV_NS)
+        dg.bind("rdfs", RDFS)
+
+        known = {}
+        merged = merged_instances()
+        for d in merged.subjects(RDF.type, MARTECH.DataLayerVariable):
+            known.setdefault(str(merged.value(d, RDFS.label) or ge._local_name(d)), d)
+
+        for d in list(dg.subjects(MARTECH.maps_to, component)):
+            dg.remove((d, MARTECH.maps_to, component))
+
+        seen = set()
+        for row in rows:
+            name = ((row or {}).get("name") or "").strip()
+            source = ((row or {}).get("source_system") or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            subject = known.get(name)
+            if subject is None:
+                base = "dlv_" + (re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "variable")
+                subject, n = DLV_NS[base], 2
+                while (subject, RDF.type, MARTECH.DataLayerVariable) in merged:
+                    subject, n = DLV_NS[f"{base}_{n}"], n + 1
+                dg.add((subject, RDF.type, MARTECH.DataLayerVariable))
+                dg.add((subject, RDFS.label, rdflib.Literal(name)))
+                known[name] = subject
+            if source and (subject, RDF.type, MARTECH.DataLayerVariable) in dg:
+                for old in list(dg.objects(subject, MARTECH.source_system)):
+                    dg.remove((subject, MARTECH.source_system, old))
+                dg.add((subject, MARTECH.source_system, rdflib.Literal(source)))
+            dg.add((subject, MARTECH.maps_to, component))
+
+        for d in list(dg.subjects(RDF.type, MARTECH.DataLayerVariable)):
+            if dg.value(d, MARTECH.maps_to) is None:
+                for triple in list(dg.triples((d, None, None))):
+                    dg.remove(triple)
+
+        if len(dg) == 0:
+            path.unlink(missing_ok=True)
+            return
+        header = (
+            "# ==========================================================================\n"
+            "# Data layer variable -> component mappings, maintained from the component edit page.\n"
+            "# Kept separate from journey files so regenerating a journey never overwrites them.\n"
+            "# ==========================================================================\n\n"
+        )
+        path.write_text(header + dg.serialize(format="turtle"), encoding="utf-8")
+
     def find_component_file(key):
         """Returns (path, file_graph, subject) for the component with this key, or (None, None, None)."""
         target = "component_" + key
@@ -155,10 +248,13 @@ def create_app(data_dir: Path) -> Flask:
         xdm_path = ""
         if xdm_refs:
             xdm_path = xdm_refs[0][len(base):] if xdm_refs[0].startswith(base) else xdm_refs[0].rsplit("/", 1)[-1]
+        dlv_names = sorted({str(merged_graph.value(d, RDFS.label) or ge._local_name(d))
+                            for d in merged_graph.subjects(MARTECH.maps_to, subject)})
         return {
             "key": key,
             "name": label,
             "type": ctype,
+            "data_layer_variables": dlv_names,
             "cja_id": cja_component_id(key, ctype, refs),
             "xdm_path": xdm_path,
             "xdm_ref": xdm_refs[0] if xdm_refs else "",
@@ -265,6 +361,10 @@ def create_app(data_dir: Path) -> Flask:
             "owner": str(owner) if owner else "",
             "refs": refs,
             "cja_description": str(g.value(s, RDFS.comment) or ""),
+            "data_layer_variables": data_layer_variables_of(s),
+            "dlv_suggestions": sorted({str(m.value(d, RDFS.label) or ge._local_name(d))
+                                       for m in [merged_instances()]
+                                       for d in m.subjects(RDF.type, MARTECH.DataLayerVariable)}),
             "data_view_id": next((r[len(CJA_URN_PREFIX):].split(":", 1)[0] for r in refs if r.startswith(CJA_URN_PREFIX)), ""),
             "source_file": path.name,
         })
@@ -295,6 +395,9 @@ def create_app(data_dir: Path) -> Flask:
                 g.add((s, MARTECH.refs, rdflib.URIRef(url)))
 
         path.write_text(g.serialize(format="turtle"), encoding="utf-8")
+
+        if isinstance(body.get("data_layer_variables"), list):
+            save_data_layer_variables(s, body["data_layer_variables"])
 
         preview = rdflib.Graph()
         preview.bind("martech", ge.MARTECH)

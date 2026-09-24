@@ -387,6 +387,31 @@ had a stray `"...checkout process!"` (exclamation mark) instead of the intended 
 from early testing, before the demo/org workspace split existed, that had already made it into the
 published repo. Fixed; scanned both bundled example files for any other similar artifacts (none found).
 
+## Data layer variables on components
+
+`martech:DataLayerVariable` + `martech:maps_to` (variable -> component) already existed in the ontology but
+were only ever written by journey generation (one variable per journey, mapped to every component it uses).
+Now they are maintained per component from `component-edit.html` ("Data layer variables" table: name +
+source system, repeatable) and shown as a column on `components.html`.
+
+- **Storage**: `datalayer-instances.ttl` in the active data directory (loaded automatically by the
+  `*-instances.ttl` glob), deliberately separate from journey files so regenerating a journey never
+  overwrites a mapping. The file is deleted when its last mapping is removed; variables left without any
+  mapping are dropped from it.
+- **Reuse**: a name that already exists as a `DataLayerVariable` anywhere (e.g. defined by a journey) is
+  reused - only a new `maps_to` triple is written - never duplicated. Its source system is not edited when it
+  lives in a journey file.
+- **Read-only vs editable**: mappings coming from journey files are listed as "from journey" and are not
+  sent back on save; only rows whose `maps_to` lives in `datalayer-instances.ttl` are editable.
+  `GET /api/components/<key>` returns `data_layer_variables` (`name`, `source_system`, `editable`) plus
+  `dlv_suggestions` (datalist of existing names); `/api/state` components carry `data_layer_variables` names.
+  `POST .../context` only touches mappings when the body contains `data_layer_variables`.
+- Graph, SPARQL, the MCP tools and `export-mcp` need no change (same predicate, same file glob).
+
+Verified on a copy of the demo data (API + headless browser): journey mappings shown read-only, new
+variable added, journey variable reused without a duplicate node, removal, orphan cleanup, and a save that
+omits the field leaving mappings intact.
+
 ## MCP server: stdio transport (new)
 
 Added `--transport {http,stdio}` to the `mcp` subcommand. `http` (default) is unchanged. `stdio` is for a

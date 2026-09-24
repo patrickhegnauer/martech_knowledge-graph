@@ -54,7 +54,7 @@
 
       <table id="table-components" class="table-fixed">
         <colgroup>
-          <col style="width:19%"><col style="width:8%"><col style="width:22%"><col style="width:24%"><col style="width:10%"><col style="width:11%"><col style="width:6%">
+          <col style="width:15%"><col style="width:7%"><col style="width:16%"><col style="width:17%"><col style="width:19%"><col style="width:10%"><col style="width:11%"><col style="width:5%">
         </colgroup>
         <thead>
           <tr>
@@ -62,6 +62,7 @@
             <th>Type</th>
             <th>CJA Component ID</th>
             <th>XDM path</th>
+            <th>Data layer variable</th>
             <th>Owner</th>
             <th>Context status</th>
             <th></th>
@@ -73,6 +74,7 @@
             <td>metric</td>
             <td class="cell-truncate">cja:metrics/productViews</td>
             <td class="cell-truncate">commerce.productViews.value</td>
+            <td class="cell-truncate">digitalData.conversion.conversionFunnel.step</td>
             <td>Digital Analytics</td>
             <td><span class="badge badge-has-context">Has context</span></td>
             <td><a href="component-edit.html?id=product_views">Edit</a></td>
@@ -82,6 +84,7 @@
             <td>metric</td>
             <td class="cell-truncate">cja:metrics/productListAdds</td>
             <td class="cell-truncate">commerce.productListAdds.value</td>
+            <td class="cell-truncate">digitalData.conversion.conversionFunnel.step</td>
             <td>Digital Analytics</td>
             <td><span class="badge badge-has-context">Has context</span></td>
             <td><a href="component-edit.html?id=product_list_adds">Edit</a></td>
@@ -91,6 +94,7 @@
             <td>metric</td>
             <td class="cell-truncate">cja:metrics/checkouts</td>
             <td class="cell-truncate">commerce.checkouts.value</td>
+            <td class="cell-truncate">digitalData.conversion.conversionFunnel.step</td>
             <td>Digital Analytics</td>
             <td><span class="badge badge-has-context">Has context</span></td>
             <td><a href="component-edit.html?id=checkouts">Edit</a></td>
@@ -100,6 +104,7 @@
             <td>metric</td>
             <td class="cell-truncate">cja:metrics/orders</td>
             <td class="cell-truncate">orders</td>
+            <td class="cell-truncate">digitalData.conversion.conversionFunnel.step</td>
             <td>Digital Analytics</td>
             <td><span class="badge badge-missing-context">Missing context</span></td>
             <td><a href="component-edit.html?id=orders">Edit</a></td>
@@ -109,6 +114,7 @@
             <td>dimension</td>
             <td class="cell-truncate">cja:dimensions/pageName</td>
             <td class="cell-truncate">web.webPageDetails.name</td>
+            <td class="cell-truncate">—</td>
             <td>Digital Analytics</td>
             <td><span class="badge badge-missing-context">Missing context</span></td>
             <td><a href="component-edit.html?id=page_name">Edit</a></td>
@@ -174,7 +180,7 @@ function renderComponentsTable(components) {
   components.forEach(c => {
     const tr = document.createElement("tr");
     tr.dataset.componentId = c.key;
-    [[c.name, "cell-wrap"], [c.type, ""], [c.cja_id, "cell-truncate"], [c.xdm_path || "—", "cell-truncate"], [c.owner || "—", "cell-wrap"]].forEach(([text, cls]) => {
+    [[c.name, "cell-wrap"], [c.type, ""], [c.cja_id, "cell-truncate"], [c.xdm_path || "—", "cell-truncate"], [(c.data_layer_variables || []).join(", ") || "—", "cell-truncate"], [c.owner || "—", "cell-wrap"]].forEach(([text, cls]) => {
       const td = document.createElement("td");
       td.textContent = text;
       td.title = text;
@@ -207,7 +213,7 @@ function applyFilters() {
     const cells = tr.querySelectorAll("td");
     const type = cells[1].textContent.trim();
     const hasContext = !!tr.querySelector(".badge-has-context");
-    const matchesText = !query || [0, 2, 3, 4].some(i => cells[i].textContent.toLowerCase().includes(query));
+    const matchesText = !query || [0, 2, 3, 4, 5].some(i => cells[i].textContent.toLowerCase().includes(query));
     const matchesFilter =
       filter === "all" ||
       (filter === "with-context" && hasContext) ||

@@ -110,6 +110,19 @@ SELECT ?journeyLabel ?order ?stageLabel ?compLabel ?filterValue WHERE {
 } ORDER BY ?journeyLabel ?order
 ```
 
+### Example: which data layer variable feeds a component
+
+`DataLayerVariable` is the raw implementation artifact; `maps_to` links it to the component it populates
+(a component can have several, and one variable can feed several components):
+```sparql
+SELECT ?componentLabel ?variable ?sourceSystem WHERE {
+  ?dlv a martech:DataLayerVariable ; rdfs:label ?variable ; martech:maps_to ?comp .
+  ?comp rdfs:label ?componentLabel .
+  OPTIONAL { ?dlv martech:source_system ?sourceSystem . }
+} ORDER BY ?componentLabel
+```
+No row for a component means its implementation source hasn't been documented yet, not that it has none.
+
 ## Things to get right
 
 - **Always surface `caveats`, not just `definition`**, when explaining a metric to someone who might act

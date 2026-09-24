@@ -79,6 +79,19 @@
       </div>
       <button type="button" id="btn-add-ref" class="secondary">Add reference row</button>
 
+      <h3>Data layer variables (martech:maps_to)</h3>
+      <p class="note">The raw implementation variable(s) that populate this component, e.g. <code>digitalData.page.pageInfo.pageName</code>. Rows marked <em>from journey</em> come from a generated journey file and are read-only here.</p>
+      <div class="table-scroll">
+        <table id="table-dlv">
+          <thead>
+            <tr><th>Variable name</th><th>Source system</th><th></th></tr>
+          </thead>
+          <tbody id="dlv-tbody"></tbody>
+        </table>
+      </div>
+      <datalist id="dlv-suggestions"></datalist>
+      <button type="button" id="btn-add-dlv" class="secondary">Add data layer variable</button>
+
       <p>
         <button type="button" id="btn-save-component">Save</button>
         <span id="save-status" class="note" style="display:none;"></span>
@@ -125,6 +138,37 @@ function addRefRow(label, url) {
 }
 
 document.getElementById("btn-add-ref").addEventListener("click", () => addRefRow("", ""));
+
+function addDlvRow(name, source, readonly) {
+  const tr = document.createElement("tr");
+  if (readonly) tr.dataset.readonly = "1";
+  [["dlv_name", name, "list"], ["dlv_source", source, null]].forEach(([field, value, list]) => {
+    const td = document.createElement("td");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.name = field;
+    input.value = value || "";
+    if (list && !readonly) input.setAttribute("list", "dlv-suggestions");
+    if (field === "dlv_source" && !readonly) input.placeholder = "e.g. Web data layer (digitalData)";
+    input.disabled = !!readonly;
+    td.appendChild(input);
+    tr.appendChild(td);
+  });
+  const actionTd = document.createElement("td");
+  if (readonly) {
+    actionTd.textContent = "from journey";
+  } else {
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "secondary";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", () => tr.remove());
+    actionTd.appendChild(remove);
+  }
+  tr.appendChild(actionTd);
+  document.getElementById("dlv-tbody").appendChild(tr);
+}
+document.getElementById("btn-add-dlv").addEventListener("click", () => addDlvRow("", "", false));
 // WIRE: (implemented above) repeatable refs row is real, client-side only | reuses: none
 
 document.getElementById("form-component-context").addEventListener("submit", ev => ev.preventDefault());
@@ -149,6 +193,15 @@ if (componentKey) {
       document.getElementById("refs-tbody").innerHTML = "";
       if (data.refs.length === 0) addRefRow("", "");
       data.refs.forEach(url => addRefRow(url.startsWith("urn:cja:") ? "CJA component" : "XDM field / reference", url));
+
+      document.getElementById("dlv-tbody").innerHTML = "";
+      (data.data_layer_variables || []).forEach(v => addDlvRow(v.name, v.source_system, !v.editable));
+      const suggestions = document.getElementById("dlv-suggestions");
+      (data.dlv_suggestions || []).forEach(n => {
+        const opt = document.createElement("option");
+        opt.value = n;
+        suggestions.appendChild(opt);
+      });
     })
     .catch(() => {
       document.getElementById("live-mode-note").textContent =
@@ -177,6 +230,10 @@ document.getElementById("btn-save-component").addEventListener("click", () => {
     context: document.getElementById("field-context").value,
     owner: document.getElementById("field-owner").value,
     refs: refs,
+    data_layer_variables: Array.from(document.querySelectorAll('#dlv-tbody tr:not([data-readonly])')).map(tr => ({
+      name: tr.querySelector('input[name="dlv_name"]').value,
+      source_system: tr.querySelector('input[name="dlv_source"]').value,
+    })),
   };
 
   statusEl.textContent = "Saving…";
