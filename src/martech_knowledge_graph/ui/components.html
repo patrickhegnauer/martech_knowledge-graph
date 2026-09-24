@@ -22,7 +22,7 @@
     <li><a href="mcp.html">MCP</a></li>
   </ul>
 </nav>
-<main>
+<main class="wide">
   <section>
     <h2>Components</h2>
     <p>Metrics and dimensions pulled from the CJA semantic layer, curated with business context here.</p>
@@ -53,7 +53,10 @@
     <div class="table-scroll">
 
 
-      <table id="table-components">
+      <table id="table-components" class="table-fixed">
+        <colgroup>
+          <col style="width:26%"><col style="width:9%"><col style="width:29%"><col style="width:15%"><col style="width:13%"><col style="width:8%">
+        </colgroup>
         <thead>
           <tr>
             <th>Name</th>
@@ -68,7 +71,7 @@
           <tr data-component-id="product_views">
             <td>Product views</td>
             <td>metric</td>
-            <td>cja:metrics/productViews</td>
+            <td class="cell-truncate">cja:metrics/productViews</td>
             <td>Digital Analytics</td>
             <td><span class="badge badge-has-context">Has context</span></td>
             <td><a href="component-edit.html?id=product_views">Edit</a></td>
@@ -76,7 +79,7 @@
           <tr data-component-id="product_list_adds">
             <td>Product list adds</td>
             <td>metric</td>
-            <td>cja:metrics/productListAdds</td>
+            <td class="cell-truncate">cja:metrics/productListAdds</td>
             <td>Digital Analytics</td>
             <td><span class="badge badge-has-context">Has context</span></td>
             <td><a href="component-edit.html?id=product_list_adds">Edit</a></td>
@@ -84,7 +87,7 @@
           <tr data-component-id="checkouts">
             <td>Checkouts</td>
             <td>metric</td>
-            <td>cja:metrics/checkouts</td>
+            <td class="cell-truncate">cja:metrics/checkouts</td>
             <td>Digital Analytics</td>
             <td><span class="badge badge-has-context">Has context</span></td>
             <td><a href="component-edit.html?id=checkouts">Edit</a></td>
@@ -92,7 +95,7 @@
           <tr data-component-id="orders">
             <td>Orders</td>
             <td>metric</td>
-            <td>cja:metrics/orders</td>
+            <td class="cell-truncate">cja:metrics/orders</td>
             <td>Digital Analytics</td>
             <td><span class="badge badge-missing-context">Missing context</span></td>
             <td><a href="component-edit.html?id=orders">Edit</a></td>
@@ -100,7 +103,7 @@
           <tr data-component-id="page_name">
             <td>Page name</td>
             <td>dimension</td>
-            <td>cja:dimensions/pageName</td>
+            <td class="cell-truncate">cja:dimensions/pageName</td>
             <td>Digital Analytics</td>
             <td><span class="badge badge-missing-context">Missing context</span></td>
             <td><a href="component-edit.html?id=page_name">Edit</a></td>
@@ -166,10 +169,11 @@ function renderComponentsTable(components) {
   components.forEach(c => {
     const tr = document.createElement("tr");
     tr.dataset.componentId = c.key;
-    const cells = [c.name, c.type, c.cja_id, c.owner || "—"];
-    cells.forEach(text => {
+    [[c.name, "cell-wrap"], [c.type, ""], [c.cja_id, "cell-truncate"], [c.owner || "—", "cell-wrap"]].forEach(([text, cls]) => {
       const td = document.createElement("td");
       td.textContent = text;
+      td.title = text;
+      if (cls) td.className = cls;
       tr.appendChild(td);
     });
     const badgeTd = document.createElement("td");

@@ -192,7 +192,7 @@ document.getElementById("btn-save-component").addEventListener("click", () => {
       document.getElementById("turtle-preview").textContent = data.turtle;
     })
     .catch(err => {
-      statusEl.textContent = "Could not reach the local API (" + err.message + ") — run `martech-knowledge-graph serve` to save for real.";
+      statusEl.textContent = "Save failed: " + err.message;
     });
 });
 </script>
