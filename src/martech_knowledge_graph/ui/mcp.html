@@ -72,7 +72,7 @@
 
     <h2>Security posture</h2>
     <div class="panel">
-      <p>No authentication yet — the server binds to <code>127.0.0.1</code> only by default, matching every other part of this tool's local-first trust model (same as <code>martech-knowledge-graph serve</code>). Reachable only from the machine it runs on unless you deliberately pass <code>--host</code> to change that.</p>
+      <p>The local server has no authentication — it binds to <code>127.0.0.1</code> only by default, matching every other part of this tool's local-first trust model (same as <code>martech-knowledge-graph serve</code>). Reachable only from the machine it runs on unless you deliberately pass <code>--host</code> to change that. A server deployed on Prefect Horizon is public-facing but protected by Horizon's OAuth (it cannot be switched off on the free tier), and its data is a snapshot in your own private repository.</p>
       <p><span class="badge badge-has-context">Read-only</span> <span class="badge badge-has-context">Localhost by default</span></p>
     </div>
 

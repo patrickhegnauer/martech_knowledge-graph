@@ -10,13 +10,10 @@ high-level picture instead of this page-by-page detail, see the architecture dia
 
 | Page | Element ID | Intended behavior | Reuses |
 |---|---|---|---|
-| components.html | `search-components` | Filter table rows by name/id as the user types | none (client-side UI only) |
-| components.html | `filter-components` | Filter table rows by context status / `component_type` | `martech-ontology.ttl` `component_type`, `definition`/`caveats`/`context`/`owner` presence |
 | component-edit.html | (readonly-block) | Refresh the read-only CJA block from the **real** CJA API (currently reads `server.py`'s `/api/components/<key>`, which sources from the local `.ttl` files, not a live CJA pull) | CJA Semantic Layer MCP |
 | data-files.html | (data files table) | List actual files on disk with real size/mtime | `graph_explorer.py` `load_graph()` auto-discovery of `*-instances.ttl` |
 | data-files.html | `file-viewer` | Load a real excerpt (or full file) of the selected data file, read-only | `martech-ontology.ttl` / `*-instances.ttl` on disk |
-| mcp.html | (tool table) | Expose `run_sparql` and `get_ontology_schema` over MCP | `run_sparql` pattern (conceptual, from `platform-mvp-handoff.md`), `martech-ontology.ttl` |
-| mcp.html | `endpoint-placeholder` | Show live endpoint URL and deployment status once the MCP exists | future MCP server |
+| mcp.html | (one-click start) | A "Generate MCP" button that starts the server and shows its URL (today: CLI command, or `export-mcp` for Horizon) | `martech-knowledge-graph mcp` / `export-mcp` |
 
 ## Component form field → ontology property mapping
 
@@ -386,6 +383,20 @@ MCP server's next call saw it immediately. Confirmed via `netstat` that the serv
 had a stray `"...checkout process!"` (exclamation mark) instead of the intended period — a leftover edit
 from early testing, before the demo/org workspace split existed, that had already made it into the
 published repo. Fixed; scanned both bundled example files for any other similar artifacts (none found).
+
+## Components page: search, filter, columns (built since the sections above)
+
+- `#search-components` and `#filter-components` are live (client-side, `applyFilters()` in `components.html`,
+  re-applied after every table render): text matches name, CJA ID, XDM path, data layer variable and owner,
+  case-insensitive; the dropdown filters by context status and metric/dimension; `#filter-count` shows
+  "Showing X of Y". Context coverage always counts all rows.
+- Table columns: name, type, CJA component ID, XDM path, data layer variable, owner, context status. Fixed
+  column widths with `.cell-truncate` (ellipsis, full value in `title`) so long CJA IDs never push the Edit
+  column off-screen; `main.wide` widens the page. The API supplies `cja_id`, `xdm_path`, `xdm_ref`,
+  `data_layer_variables` per component (`component_summary()` in `server.py`).
+- **Journeys reuse curated components**: `api_generate_journey` collects component keys already defined in
+  *other* `*-instances.ttl` files and passes them to `journey_builder` as `existing_components`; those keys
+  are referenced by URI instead of redefined, and returned as `reused_components`.
 
 ## Data layer variables on components
 

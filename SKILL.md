@@ -20,7 +20,9 @@ The graph is exposed over MCP (Streamable HTTP) by:
 martech-knowledge-graph mcp
 ```
 which prints the URL it's listening on — `http://127.0.0.1:8931/mcp` by default. Add that as an MCP
-server connection. There's no authentication (localhost-only by default) — if you can't reach it, it
+server connection. (Other ways to reach the same graph: `martech-knowledge-graph mcp --transport stdio`,
+spawned from Claude Desktop's local server config, or a hosted snapshot on Prefect Horizon via
+`martech-knowledge-graph export-mcp` — a `https://<name>.fastmcp.app/mcp` URL that uses OAuth.) There's no authentication (localhost-only by default) — if you can't reach it, it
 probably isn't running; ask the person you're helping to start it (`martech-knowledge-graph mcp` in a
 terminal, from wherever this repo/package is installed) rather than guessing at data.
 

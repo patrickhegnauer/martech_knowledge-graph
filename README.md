@@ -25,11 +25,13 @@ flowchart LR
     end
 
     GE["graph_explorer.py<br/>(load + extract, shared)"]
+    CJA["Adobe CJA API<br/>(OAuth Server-to-Server)"]
+    Horizon["Prefect Horizon<br/>(hosted MCP URL)"]
 
     subgraph Data["Flat .ttl files — no database"]
         ONT["ontology/martech-ontology.ttl<br/>always loaded, read-only"]
         DEMO["examples/*.ttl<br/>demo workspace, read-only"]
-        ORG["--data-dir<br/>org workspace, read/write<br/>+ .mkg-mode + .mkg-settings.json"]
+        ORG["--data-dir<br/>org workspace, read/write<br/>+ .mkg-mode, .mkg-settings.json,<br/>.mkg-cja.json (credentials)"]
     end
 
     Browser <-->|"fetch()"| API
@@ -41,6 +43,9 @@ flowchart LR
     GE -. demo mode .-> DEMO
     GE -. org mode .-> ORG
     JB -->|writes generated journeys| ORG
+    API <-->|"sync data views,<br/>metrics, dimensions"| CJA
+    API -->|"writes components,<br/>context, data layer variables"| ORG
+    ORG -. "export-mcp snapshot<br/>(your private GitHub repo)" .-> Horizon
 ```
 
 The demo/org mode switch (top right of every page) changes which of `examples/` or `--data-dir` both
@@ -59,13 +64,16 @@ what.
 | `src/martech_knowledge_graph/graph_explorer.py` | Internal library `server.py` and `mcp_server.py` use to load the graph and extract data from it — not a standalone tool |
 | `src/martech_knowledge_graph/journey_builder.py` | Generates correct turtle from structured input (a spreadsheet or Python), instead of hand-writing it |
 | `src/martech_knowledge_graph/workspace.py` | Shared demo/org mode resolution — read by `server.py` and `mcp_server.py` so both processes agree on which workspace is active |
+| `src/martech_knowledge_graph/cja_client.py` | Small stdlib client for the Adobe CJA API (OAuth Server-to-Server token, data views, metrics, dimensions) used by the CJA sync |
+| `src/martech_knowledge_graph/export.py` | Behind `martech-knowledge-graph export-mcp` — scaffolds a folder you can deploy to Prefect Horizon, see [MCP server](#mcp-server) |
+| `SKILL.md` | Skill file for AI agents/Claude connecting to the MCP server: graph shape, tools, verified example SPARQL queries |
 | `src/martech_knowledge_graph/server.py` + `cli.py` | The local API + UI server behind the `martech-knowledge-graph serve` command |
 | `src/martech_knowledge_graph/mcp_server.py` | The MCP server behind the `martech-knowledge-graph mcp` command — see [MCP server](#mcp-server) below |
 | `src/martech_knowledge_graph/ui/` | The maintenance UI (components, journeys, graph viewer, SPARQL query, ontology reference) — served by `server.py`, see [Web UI](#web-ui) below |
 
 ## Setup
 
-Requires Python 3.9+.
+Requires Python 3.10+.
 ```
 git clone <this-repo-url>
 cd martech-knowledge-graph
@@ -75,11 +83,11 @@ Activate it (`.venv\Scripts\Activate.ps1` on Windows PowerShell, `source .venv/b
 ```
 pip install -e .
 ```
-This installs `rdflib` and `flask` (the only two dependencies) and adds a `martech-knowledge-graph` command
-to your environment. To install it elsewhere (e.g. someone else's machine) without cloning first:
+This installs `rdflib`, `flask` and `fastmcp` and adds a `martech-knowledge-graph` command to your environment. To install it elsewhere (e.g. someone else's machine) without cloning first:
 ```
-pip install git+<this-repo-url>
+pip install git+<this-repo-url>@<version-tag>
 ```
+Every push is released as a version tag (`v0.1.2`, ...); pin one for a reproducible install.
 
 ## Usage
 
@@ -104,7 +112,10 @@ martech-knowledge-graph serve --data-dir ./my-data --host 127.0.0.1 --port 8080
   Which mode is currently active is remembered in a `.mkg-mode` file inside this directory, so it
   persists across restarts. Org-specific settings (currently just the XDM base URL used for generated
   component refs — see [Journeys](#adding-a-new-journey) — set via the Journeys page) live in a
-  `.mkg-settings.json` file in the same directory.
+  `.mkg-settings.json` file in the same directory, and your CJA credentials (see
+  [Connecting to CJA](#connecting-to-cja)) in `.mkg-cja.json` — that file holds a secret, never commit or
+  share this directory. Besides your journey files it collects `components-instances.ttl` (synced
+  components) and `datalayer-instances.ttl` (data layer variable mappings).
 - `--host` / `--port` (defaults `127.0.0.1` / `5055`).
 - `--debug` — enables Flask's debugger. Off by default; only pass this for local development, since the
   debugger allows arbitrary code execution if the port is ever reachable by anyone else.
@@ -180,6 +191,41 @@ the top-right corner of the header regardless of mode. Demo mode is read-only �
 syncing from CJA, or generating a journey while still in demo mode is refused by the server with a clear
 message rather than silently writing into the bundled example data.
 
+## Connecting to CJA
+
+Components → **Sync from CJA**. You need an Adobe Developer Console project with an **OAuth
+Server-to-Server** credential and the Customer Journey Analytics API, on a product profile that can see
+your data views. Enter client ID, client secret, org ID (`...@AdobeOrg`) and scopes (default
+`openid,AdobeID,read_organizations,additional_info.projectedProductContext`). The app first requests a real
+token from Adobe; only if that works are the credentials saved — server-side, in `.mkg-cja.json` in your
+data directory (never in the browser, never in a `.ttl`, never in an `export-mcp` snapshot).
+
+Then pick a data view and sync. All of its metrics and dimensions are added as components with:
+- a `martech:refs` pointer to the CJA component (`urn:cja:<dataViewId>:<componentId>`, shown as the "CJA
+  Component ID" column),
+- a second `martech:refs` to the **XDM field** — your XDM base URL plus the schema path CJA reports (only
+  where CJA reports one; derived fields have none),
+- CJA's description (shown read-only on the edit page).
+
+Re-syncing is safe: existing components are never overwritten (your curated context stays) and are only
+enriched with a missing XDM reference or description. Set your XDM base URL on the Journeys page before
+syncing so the references point at your sandbox rather than the `SANDBOX_NAME` placeholder; syncing again
+after changing it corrects previously written references.
+
+## Curating components
+
+Every component (from a CJA sync or from a journey) is edited from its **Edit** link on the Components page:
+- **Business context** — `definition`, `caveats`, `context`, `owner`. Context coverage counts a component as
+  covered once all four are filled in.
+- **References** — the CJA and XDM pointers above, plus any you add.
+- **Data layer variables** — the raw implementation variable(s) that populate the component (name + source
+  system, several allowed). Stored in `datalayer-instances.ttl` using `martech:maps_to`, separate from
+  journey files so regenerating a journey never overwrites them. An existing variable name is reused, not
+  duplicated; mappings that come from a journey show as read-only "from journey".
+
+The Components table has search (name, CJA ID, XDM path, data layer variable, owner) and a filter for context
+status and metric/dimension, and shows the CJA ID, XDM path and data layer variable of every component.
+
 ## Adding a new journey
 
 You don't need to hand-write turtle. Three ways in — the first two produce identical output (verified
@@ -207,6 +253,12 @@ If you're not going through the web UI, save the output as `<slug>-instances.ttl
 `*-instances.ttl` there, no code changes or restart needed.
 
 The builder guarantees the mechanical parts are correct (the `Measurement` relation node only appears when a stage's `filter_value` is set, `DataLayerVariable.maps_to` stays in sync with which components are actually used) — it doesn't and can't decide what a Requirement says or what a Component's caveat is. That's still a judgment call, not something a script should fill in for you.
+
+**Components that already exist are reused.** If a row's `component_key` matches a component already in
+another data file — typically one synced from CJA and curated on the Components page — the journey
+*references that component* and keeps its curated context; the `component_*` columns for that key are
+ignored. Only new keys are defined by the journey. (A CJA-synced key is the CJA id without its
+`metrics/`/`variables/` prefix, lower-cased, e.g. `metrics/orders` → `orders`.)
 
 **Each component's `xdm_path` column** (e.g. `commerce.checkouts.value`) becomes its `martech:refs` URI by
 appending it to a base URL — `https://sandbox/SANDBOX_NAME/xdm/` by default, a placeholder. Set your org's
@@ -241,7 +293,16 @@ thing as an `xdm_base_url` argument.
   working in the meantime) and any authentication on the MCP endpoint (currently localhost-only by
   default, no auth).
 - ⏳ Not yet built: validation rules (e.g. SHACL) enforcing the ontology's constraints automatically, regardless of how a change was authored.
-- ⏳ Not yet built: a way for a journey's CSV to reference an already-curated component by key instead of re-entering its definition/caveats/context inline on every stage row.
+- ✅ Real CJA sync — OAuth Server-to-Server, data view picker, all metrics and dimensions with CJA and XDM
+  references; verified against a real tenant. Search/filter, XDM path and data layer variable columns on the
+  Components table.
+- ✅ Data layer variables per component (`martech:maps_to`), and journeys reusing already-curated components
+  by key instead of duplicating them.
+- ✅ Hosted MCP: `martech-knowledge-graph export-mcp` scaffolds a deployable folder for Prefect Horizon
+  (each org deploys its own; this project hosts nothing). The actual Horizon deploy hasn't been verified
+  end-to-end by us yet.
+- ⏳ Not yet built: dedicated CJA support for calculated metrics/segments, and handling of components that
+  disappear from CJA (they keep their stored context)
 
 ## License
 
