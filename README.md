@@ -87,7 +87,10 @@ This installs `rdflib`, `flask` and `fastmcp` and adds a `martech-knowledge-grap
 ```
 pip install git+<this-repo-url>@<version-tag>
 ```
-Every push is released as a version tag (`v0.1.2`, ...); pin one for a reproducible install.
+Every push is released as a version tag (`v0.1.3`, ...); pin one for a reproducible install. The running
+version is shown in every page's header (next to a **BETA** badge) — it is the version of the server process that
+is actually running, so it also tells you when you need to restart `serve` after an update. The version lives in
+one place, `__version__` in `src/martech_knowledge_graph/__init__.py`.
 
 ## Usage
 

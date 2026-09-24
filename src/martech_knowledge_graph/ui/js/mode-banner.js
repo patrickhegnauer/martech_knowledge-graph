@@ -79,9 +79,36 @@
     document.body.insertBefore(banner, document.body.firstChild);
   }
 
+  function renderVersion(version) {
+    const title = document.querySelector("header.site-header h1");
+    if (!title) return;
+    let beta = document.getElementById("beta-badge");
+    if (!beta) {
+      beta = document.createElement("span");
+      beta.id = "beta-badge";
+      beta.className = "beta-badge";
+      beta.textContent = "BETA";
+      title.appendChild(beta);
+    }
+    if (version) {
+      let tag = document.getElementById("version-tag");
+      if (!tag) {
+        tag = document.createElement("span");
+        tag.id = "version-tag";
+        tag.className = "version-tag";
+        title.appendChild(tag);
+      }
+      tag.textContent = "v" + version;
+      tag.title = "Version of the server that is currently running";
+    }
+  }
+
+  renderVersion(null);
+
   fetch("/api/state")
     .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
     .then(data => {
+      renderVersion(data.version);
       renderBanner(data.mode);
       renderSwitcher(data.mode);
     })

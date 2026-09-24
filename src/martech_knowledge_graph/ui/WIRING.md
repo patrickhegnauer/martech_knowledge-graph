@@ -384,6 +384,15 @@ had a stray `"...checkout process!"` (exclamation mark) instead of the intended 
 from early testing, before the demo/org workspace split existed, that had already made it into the
 published repo. Fixed; scanned both bundled example files for any other similar artifacts (none found).
 
+## Version + BETA badge in the header
+
+`js/mode-banner.js` (already on every page) appends a **BETA** badge and, once `/api/state` answers, the
+running version (`v0.1.3`, from `collect_state()["version"]`) to the header's `<h1>`. The version comes from
+`martech_knowledge_graph.__version__`, read when the server process starts — so it shows what is *running*,
+not what is installed on disk; a stale `serve` process after an update shows the old number. That constant is
+the single source of truth: `pyproject.toml` reads it (`dynamic = ["version"]`) and `export-mcp` pins its
+generated `requirements.txt` to `@v<__version__>`. Without the API (standalone file) only BETA is shown.
+
 ## Components page: search, filter, columns (built since the sections above)
 
 - `#search-components` and `#filter-components` are live (client-side, `applyFilters()` in `components.html`,

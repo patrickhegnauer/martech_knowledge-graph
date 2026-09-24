@@ -1,9 +1,9 @@
 """Scaffold a self-contained, Prefect Horizon-deployable MCP project from a workspace's data."""
 
 import shutil
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
+from . import __version__
 from .workspace import MODE_MARKER_NAME
 
 REPO_URL = "https://github.com/patrickhegnauer/martech_knowledge-graph.git"
@@ -54,10 +54,7 @@ def export_mcp_project(out_dir: Path, source_dir: Path, name: str) -> int:
         shutil.copy2(f, data_dir / f.name)
     (data_dir / MODE_MARKER_NAME).write_text("org", encoding="utf-8")
 
-    try:
-        pin = f"@v{version('martech-knowledge-graph')}"
-    except PackageNotFoundError:
-        pin = ""
+    pin = f"@v{__version__}"
     (out_dir / "server.py").write_text(SERVER_PY, encoding="utf-8")
     (out_dir / "requirements.txt").write_text(
         f"martech-knowledge-graph @ git+{REPO_URL}{pin}\n", encoding="utf-8"

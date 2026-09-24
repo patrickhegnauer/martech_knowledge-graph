@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "martech-knowledge-graph"
-version = "0.1.2"
+dynamic = ["version"]
 description = "A maintenance UI + local API for a martech knowledge graph (RDFS ontology in Turtle, queried with SPARQL)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,6 +16,9 @@ dependencies = [
 
 [project.scripts]
 martech-knowledge-graph = "martech_knowledge_graph.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "martech_knowledge_graph.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]

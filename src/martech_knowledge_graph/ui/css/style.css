@@ -127,6 +127,27 @@ header.site-header h1 {
 }
 
 /* Injected by js/mode-banner.js */
+.beta-badge {
+  display: inline-block;
+  margin-left: 0.6rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+}
+
+.version-tag {
+  margin-left: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
 .mode-banner {
   display: flex;
   align-items: center;

@@ -40,7 +40,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from . import graph_explorer as ge
 from . import journey_builder as jb
-from . import cja_client
+from . import __version__, cja_client
 from .workspace import MODE_MARKER_NAME
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -292,6 +292,7 @@ def create_app(data_dir: Path) -> Flask:
         journeys.sort(key=lambda j: j["label"])
 
         return {
+            "version": __version__,
             "mode": state["mode"],
             "components": components,
             "journeys": journeys,
