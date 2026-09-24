@@ -438,6 +438,10 @@ def create_app(data_dir: Path) -> Flask:
                 subject = subject_by_ref[ref]
                 changed = False
                 if xdm_ref is not None and (subject, MARTECH.refs, xdm_ref) not in g:
+                    # An XDM ref built from an older base URL (same path, different prefix) is replaced.
+                    for old in list(g.objects(subject, MARTECH.refs)):
+                        if str(old).startswith("http") and str(old).rsplit("/", 1)[-1] == comp["schema_path"]:
+                            g.remove((subject, MARTECH.refs, old))
                     g.add((subject, MARTECH.refs, xdm_ref))
                     changed = True
                 if comp["description"] and g.value(subject, RDFS.comment) is None:
