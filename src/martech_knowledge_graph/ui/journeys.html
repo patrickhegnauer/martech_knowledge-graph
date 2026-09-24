@@ -25,7 +25,8 @@
 <main>
   <section>
     <h2>Journeys</h2>
-    <p class="note">Journeys stay CSV-based — see platform-mvp-handoff.md. A Journey is compound (requirement + KPI + several stages + measurements), so it is authored as a spreadsheet/CSV via <code>journey_builder.py</code> rather than a form. No wizard is planned unless the CSV path proves insufficient in practice.</p>
+    <p>A journey connects a business requirement and KPI to the stages of a customer path, each measured by a component. Build one in a form, picking components you have already synced and curated — or import many at once from a CSV below.</p>
+    <p><a class="btn" href="journey-edit.html">New journey</a></p>
     <p class="note" id="live-mode-note">Checking for a local API…</p>
 
     <div class="table-scroll">
@@ -38,7 +39,8 @@
             <th>Requirement</th>
             <th>Stages</th>
             <th>KPIs</th>
-            <th>Last generated</th>
+            <th>Last saved</th>
+            <th></th>
           </tr>
         </thead>
         <tbody id="journeys-tbody">
@@ -48,6 +50,7 @@
             <td>4</td>
             <td>1</td>
             <td>2026-08-14</td>
+            <td><a href="journey-edit.html?slug=ecommerce">Edit</a></td>
           </tr>
           <tr data-journey-slug="login">
             <td>Customer login journey</td>
@@ -55,6 +58,7 @@
             <td>2</td>
             <td>1</td>
             <td>2026-08-14</td>
+            <td><a href="journey-edit.html?slug=login">Edit</a></td>
           </tr>
         </tbody>
       </table>
@@ -78,7 +82,7 @@
   </section>
 
   <section>
-    <h2>Upload / paste a journey CSV</h2>
+    <h2>Import from CSV</h2>
     <div class="panel">
       <label for="input-journey-csv">Upload CSV file</label>
       <input type="file" id="input-journey-csv" name="journey_csv" accept=".csv">
@@ -131,12 +135,17 @@ function renderJourneysTable(journeys) {
   journeys.forEach(j => {
     const tr = document.createElement("tr");
     tr.dataset.journeySlug = j.slug;
-    tr.innerHTML =
-      "<td>" + j.label + "</td>" +
-      "<td>" + (j.requirement || "—") + "</td>" +
-      "<td>" + j.stages + "</td>" +
-      "<td>" + j.kpis + "</td>" +
-      "<td>" + j.last_generated + "</td>";
+    [j.label, j.requirement || "—", String(j.stages), String(j.kpis), j.last_generated].forEach(text => {
+      const td = document.createElement("td");
+      td.textContent = text;
+      tr.appendChild(td);
+    });
+    const actionTd = document.createElement("td");
+    const a = document.createElement("a");
+    a.href = "journey-edit.html?slug=" + encodeURIComponent(j.slug);
+    a.textContent = "Edit";
+    actionTd.appendChild(a);
+    tr.appendChild(actionTd);
     tbody.appendChild(tr);
   });
 }

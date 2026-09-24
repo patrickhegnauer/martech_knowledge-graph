@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Journey — Martech Knowledge Graph</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="site-header">
+  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+</header>
+<nav class="site-nav">
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="ontology.html">Ontology</a></li>
+    <li><a href="components.html">Components</a></li>
+    <li class="active"><a href="journeys.html">Journeys</a></li>
+    <li><a href="graph.html">Graph</a></li>
+    <li><a href="query.html">Query</a></li>
+    <li><a href="data-files.html">Data Files</a></li>
+    <li><a href="mcp.html">MCP</a></li>
+  </ul>
+</nav>
+<main class="wide">
+  <section>
+    <h2 id="page-title">New Journey</h2>
+    <p><a href="journeys.html">&larr; Back to journeys</a></p>
+    <p class="note" id="live-mode-note">Checking for a local API…</p>
+
+    <form id="form-journey" class="field-form" action="#" method="post">
+      <h3>Journey</h3>
+      <label for="field-label">Journey name</label>
+      <input type="text" id="field-label" autocomplete="off" placeholder="e.g. Ecommerce purchase journey">
+
+      <label for="field-slug">Slug (file name and namespace)</label>
+      <input type="text" id="field-slug" autocomplete="off" placeholder="e.g. ecommerce">
+      <p class="note" id="slug-note">Filled in from the name; saved as <code>&lt;slug&gt;-instances.ttl</code>. Cannot be changed once the journey exists.</p>
+
+      <label for="field-owner">Owner</label>
+      <input type="text" id="field-owner" autocomplete="off">
+
+      <h3>Requirement</h3>
+      <label for="field-req-label">Business requirement</label>
+      <input type="text" id="field-req-label" autocomplete="off" placeholder="e.g. Understand shop performance and drop-off">
+      <label for="field-req-comment">Description</label>
+      <textarea id="field-req-comment" rows="2"></textarea>
+
+      <h3>KPI</h3>
+      <label for="field-kpi-label">KPI name</label>
+      <input type="text" id="field-kpi-label" autocomplete="off" placeholder="e.g. Order conversion rate">
+      <label for="field-kpi-formula">Formula</label>
+      <input type="text" id="field-kpi-formula" autocomplete="off" placeholder="e.g. Orders / Product Views">
+      <label for="field-kpi-owner">KPI owner</label>
+      <input type="text" id="field-kpi-owner" autocomplete="off">
+      <label for="field-kpi-target">Target (number, optional)</label>
+      <input type="text" id="field-kpi-target" autocomplete="off" placeholder="e.g. 0.002">
+      <label for="field-kpi-comment">KPI note (optional)</label>
+      <textarea id="field-kpi-comment" rows="2"></textarea>
+
+      <h3>Stages</h3>
+      <p class="note">One row per step of the journey, in order. Each stage is measured by a component you already have — its definition, caveats and context come from the component itself (edit those on the Components page). Set a <strong>filter value</strong> when several stages share one component (e.g. the same page-name dimension, different page paths). Data layer variables are maintained per component, not here.</p>
+      <div class="table-scroll">
+        <table id="table-stages" class="table-fixed">
+          <colgroup>
+            <col style="width:4%"><col style="width:24%"><col style="width:32%"><col style="width:18%"><col style="width:8%"><col style="width:14%">
+          </colgroup>
+          <thead>
+            <tr><th>#</th><th>Stage name</th><th>Component</th><th>Filter value</th><th>Rolls up to KPI</th><th></th></tr>
+          </thead>
+          <tbody id="stages-tbody"></tbody>
+        </table>
+      </div>
+      <datalist id="components-list"></datalist>
+      <p class="note note-error" id="components-empty" style="display:none;">No components yet — <a href="components.html">sync them from CJA</a> first.</p>
+      <button type="button" id="btn-add-stage" class="secondary">Add stage</button>
+
+      <p>
+        <button type="button" id="btn-save-journey">Save journey</button>
+        <span id="save-status" class="note" style="display:none;"></span>
+      </p>
+    </form>
+  </section>
+
+  <section id="preview-section" hidden>
+    <h3>Generated turtle</h3>
+    <div class="panel"><pre class="code-block" id="turtle-preview"></pre></div>
+  </section>
+</main>
+<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`). Saving writes the journey's file in your data directory; components are referenced, never copied.</footer>
+
+<script>
+const slugParam = new URLSearchParams(location.search).get("slug");
+const editing = !!slugParam;
+const $ = id => document.getElementById(id);
+const componentByLabel = {};   // datalist text -> component key
+const labelByKey = {};         // component key -> datalist text
+let slugTouched = false;
+let savedAsExisting = false;   // once a new journey is saved, later saves edit that file
+
+function slugify(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function showStatus(text, isError) {
+  const el = $("save-status");
+  el.textContent = text;
+  el.style.display = "inline";
+  el.classList.toggle("note-error", !!isError);
+}
+
+function addStageRow(stage) {
+  stage = stage || {};
+  const tr = document.createElement("tr");
+  tr.dataset.key = stage.key || "";
+
+  const numTd = document.createElement("td");
+  tr.appendChild(numTd);
+
+  function inputCell(className, value, placeholder, list) {
+    const td = document.createElement("td");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = className;
+    input.value = value || "";
+    input.autocomplete = "off";
+    if (placeholder) input.placeholder = placeholder;
+    if (list) input.setAttribute("list", list);
+    td.appendChild(input);
+    tr.appendChild(td);
+    return input;
+  }
+  inputCell("stage-label", stage.label, "e.g. Product view");
+  inputCell("stage-component", stage.component_key ? (labelByKey[stage.component_key] || stage.component_key) : "",
+            "Type to search components…", "components-list");
+  inputCell("stage-filter", stage.filter_value, "optional");
+
+  const rollTd = document.createElement("td");
+  const roll = document.createElement("input");
+  roll.type = "checkbox";
+  roll.className = "stage-rollup";
+  roll.checked = !!stage.rolls_up_to_kpi;
+  rollTd.appendChild(roll);
+  tr.appendChild(rollTd);
+
+  const actionTd = document.createElement("td");
+  [["↑", () => { if (tr.previousElementSibling) tr.parentNode.insertBefore(tr, tr.previousElementSibling); renumber(); }, "Move up"],
+   ["↓", () => { if (tr.nextElementSibling) tr.parentNode.insertBefore(tr.nextElementSibling, tr); renumber(); }, "Move down"],
+   ["✕", () => { tr.remove(); renumber(); }, "Remove stage"]].forEach(([text, handler, title]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "secondary";
+    b.textContent = text;
+    b.title = title;
+    b.addEventListener("click", handler);
+    actionTd.appendChild(b);
+  });
+  tr.appendChild(actionTd);
+
+  $("stages-tbody").appendChild(tr);
+  renumber();
+}
+
+function renumber() {
+  Array.from($("stages-tbody").children).forEach((tr, i) => { tr.firstChild.textContent = String(i + 1); });
+}
+
+function resolveComponent(text) {
+  const t = text.trim();
+  if (componentByLabel[t]) return componentByLabel[t];
+  return labelByKey[t] ? t : "";   // a bare component key is also accepted
+}
+
+function collectSpec() {
+  const bad = [];
+  const stages = Array.from($("stages-tbody").children).map((tr, i) => {
+    const text = tr.querySelector(".stage-component").value;
+    const key = resolveComponent(text);
+    const input = tr.querySelector(".stage-component");
+    input.style.borderColor = key || !text.trim() ? "" : "#d64545";
+    if (text.trim() && !key) bad.push(i + 1);
+    return {
+      key: tr.dataset.key || "",
+      label: tr.querySelector(".stage-label").value,
+      component_key: key,
+      filter_value: tr.querySelector(".stage-filter").value,
+      rolls_up_to_kpi: tr.querySelector(".stage-rollup").checked,
+    };
+  });
+  return {
+    spec: {
+      mode: (editing || savedAsExisting) ? "edit" : "new",
+      slug: $("field-slug").value.trim(),
+      journey_label: $("field-label").value,
+      journey_owner: $("field-owner").value,
+      requirement_label: $("field-req-label").value,
+      requirement_comment: $("field-req-comment").value,
+      kpi_label: $("field-kpi-label").value,
+      kpi_formula: $("field-kpi-formula").value,
+      kpi_owner: $("field-kpi-owner").value,
+      kpi_target: $("field-kpi-target").value,
+      kpi_comment: $("field-kpi-comment").value,
+      stages: stages,
+    },
+    badRows: bad,
+  };
+}
+
+function fillForm(spec) {
+  $("field-label").value = spec.journey_label;
+  $("field-slug").value = spec.slug;
+  $("field-owner").value = spec.journey_owner;
+  $("field-req-label").value = spec.requirement_label;
+  $("field-req-comment").value = spec.requirement_comment;
+  $("field-kpi-label").value = spec.kpi_label;
+  $("field-kpi-formula").value = spec.kpi_formula;
+  $("field-kpi-owner").value = spec.kpi_owner;
+  $("field-kpi-target").value = spec.kpi_target === null || spec.kpi_target === undefined ? "" : spec.kpi_target;
+  $("field-kpi-comment").value = spec.kpi_comment;
+  $("stages-tbody").innerHTML = "";
+  spec.stages.forEach(addStageRow);
+}
+
+$("field-label").addEventListener("input", () => {
+  if (!editing && !slugTouched) $("field-slug").value = slugify($("field-label").value);
+});
+$("field-slug").addEventListener("input", () => { slugTouched = true; });
+$("btn-add-stage").addEventListener("click", () => addStageRow());
+$("form-journey").addEventListener("submit", ev => ev.preventDefault());
+
+$("btn-save-journey").addEventListener("click", () => {
+  const { spec, badRows } = collectSpec();
+  if (badRows.length) {
+    showStatus("Stage " + badRows.join(", ") + ": pick a component from the list.", true);
+    return;
+  }
+  showStatus("Saving…", false);
+  fetch("/api/journeys/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(spec),
+  })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (!ok) throw new Error(data.error || "save failed");
+      showStatus("Saved.", false);
+      $("turtle-preview").textContent = data.turtle;
+      $("preview-section").hidden = false;
+      $("page-title").textContent = "Edit Journey: " + spec.journey_label;
+      if (!editing) history.replaceState(null, "", "journey-edit.html?slug=" + encodeURIComponent(data.slug));
+      $("field-slug").readOnly = true;
+      savedAsExisting = true;
+    })
+    .catch(err => showStatus("Save failed: " + err.message, true));
+});
+
+fetch("/api/state")
+  .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
+  .then(data => {
+    $("live-mode-note").textContent = "Live data.";
+    const list = $("components-list");
+    data.components.forEach(c => {
+      let text = c.name + " — " + (c.cja_id || c.key);
+      if (componentByLabel[text]) text += " [" + c.key + "]";
+      componentByLabel[text] = c.key;
+      labelByKey[c.key] = text;
+      const opt = document.createElement("option");
+      opt.value = text;
+      list.appendChild(opt);
+    });
+    $("components-empty").style.display = data.components.length ? "none" : "block";
+    if (!editing) { addStageRow(); addStageRow(); return; }
+    $("page-title").textContent = "Edit Journey";
+    $("field-slug").readOnly = true;
+    return fetch("/api/journeys/" + encodeURIComponent(slugParam))
+      .then(r => r.json().then(spec => { if (!r.ok) throw new Error(spec.error || "not found"); return spec; }))
+      .then(spec => {
+        $("page-title").textContent = "Edit Journey: " + spec.journey_label;
+        fillForm(spec);
+        if (spec.data_layer_variable) {
+          $("slug-note").textContent = "This journey has its own data layer variable (" + spec.data_layer_variable + "), kept as is.";
+        }
+      });
+  })
+  .catch(err => {
+    $("live-mode-note").textContent = "Could not load: " + err.message;
+    $("btn-save-journey").disabled = true;
+  });
+</script>
+<script src="js/mode-banner.js"></script>
+</body>
+</html>

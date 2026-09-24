@@ -9,6 +9,7 @@ Usage: see build_example_ecommerce() / build_example_login() at the
 bottom for two worked examples that reproduce the existing files.
 """
 
+import re
 from dataclasses import dataclass, field
 
 
@@ -30,6 +31,7 @@ class ComponentSpec:
     context: str
     owner: str
     xdm_path: str            # e.g. "commerce.productViews.value" -- becomes the refs URI
+    refs: list = None        # full ref URIs; when set they are emitted verbatim instead of xdm_base_url + xdm_path
 
 
 @dataclass
@@ -61,8 +63,13 @@ class JourneySpec:
 
 
 def _esc(s):
-    """Escape double quotes for safe embedding in a turtle string literal."""
-    return s.replace('"', "'")
+    """Make a value safe inside a turtle string literal (double quotes become single quotes)."""
+    return (s.replace("\\", "\\\\").replace('"', "'")
+            .replace("\r\n", "\n").replace("\n", "\\n").replace("\r", "\\n").replace("\t", " "))
+
+
+def slugify(text, fallback="item"):
+    return re.sub(r"[^a-z0-9]+", "_", (text or "").lower()).strip("_") or fallback
 
 
 def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE_URL,
@@ -163,7 +170,7 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
             f'    martech:caveats "{_esc(c.caveats)}" ;',
             f'    martech:context "{_esc(c.context)}" ;',
             f'    martech:owner "{_esc(c.owner)}" ;',
-            f"    martech:refs <{xdm_base_url}{c.xdm_path}> .",
+            "    martech:refs " + (", ".join(f"<{r}>" for r in c.refs) if c.refs else f"<{xdm_base_url}{c.xdm_path}>") + " .",
             "",
         ]
 
@@ -200,6 +207,103 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
         lines += block + [""]
 
     return "\n".join(lines).rstrip() + "\n"
+
+
+# ---------------------------------------------------------------------------
+# Reverse direction -- read a journey file back into a JourneySpec so a form
+# can edit it. Refuses anything it could not write back unchanged.
+# ---------------------------------------------------------------------------
+
+_ROUND_TRIP_PREDICATES = {
+    "type", "label", "comment", "status", "addressed_by", "formula", "owner", "target", "has_stage", "order",
+    "rolls_up_to", "component_type", "definition", "caveats", "context", "refs", "maps_to", "source_system",
+    "measured_entity", "measured_component", "filter_value",
+}
+_ROUND_TRIP_TYPES = {"Requirement", "KPI", "Journey", "Stage", "Component", "DataLayerVariable", "Measurement"}
+
+
+def _local(uri):
+    return str(uri).rstrip("/").split("/")[-1].split("#")[-1]
+
+
+def journey_from_graph(g, slug):
+    """Returns (JourneySpec, None) or (None, reason). g must hold just this journey's file."""
+    from rdflib import RDF, RDFS, Namespace
+    M = Namespace(ONTOLOGY_NS)
+
+    def one(node, pred):
+        return g.value(node, pred)
+
+    def text(node, pred, default=""):
+        v = one(node, pred)
+        return str(v) if v is not None else default
+
+    for s, p, o in g:
+        if p == RDF.type:
+            name = _local(o)
+            if name not in _ROUND_TRIP_TYPES:
+                return None, f"contains a {name}, which the form cannot preserve"
+        elif p == RDFS.label:
+            continue
+        elif p == RDFS.comment:
+            continue
+        elif _local(p) not in _ROUND_TRIP_PREDICATES or not str(p).startswith(ONTOLOGY_NS):
+            return None, f"uses a property the form cannot preserve ({_local(p)})"
+
+    journeys = list(g.subjects(RDF.type, M.Journey))
+    kpis = list(g.subjects(RDF.type, M.KPI))
+    reqs = list(g.subjects(RDF.type, M.Requirement))
+    if len(journeys) != 1 or len(kpis) != 1 or len(reqs) != 1:
+        return None, "must contain exactly one journey, one requirement and one KPI"
+    journey, kpi, req = journeys[0], kpis[0], reqs[0]
+
+    own_components = {}
+    for c in g.subjects(RDF.type, M.Component):
+        key = _local(c)[len("component_"):] if _local(c).startswith("component_") else _local(c)
+        own_components[c] = ComponentSpec(
+            key=key, label=text(c, RDFS.label), component_type=text(c, M.component_type),
+            definition=text(c, M.definition), caveats=text(c, M.caveats), context=text(c, M.context),
+            owner=text(c, M.owner), xdm_path="", refs=sorted(str(r) for r in g.objects(c, M.refs)),
+        )
+
+    measurements = {}
+    for m in g.subjects(RDF.type, M.Measurement):
+        stage = one(m, M.measured_entity)
+        if stage in measurements:
+            return None, "a stage is measured by more than one component"
+        measurements[stage] = m
+
+    stages = []
+    for st in g.objects(journey, M.has_stage):
+        m = measurements.get(st)
+        comp = one(m, M.measured_component) if m is not None else None
+        if comp is None:
+            return None, f"stage '{text(st, RDFS.label)}' has no measured component"
+        comp_key = own_components[comp].key if comp in own_components else (
+            _local(comp)[len("component_"):] if _local(comp).startswith("component_") else _local(comp))
+        name = _local(st)
+        stages.append(StageSpec(
+            key=name[len("stage_"):] if name.startswith("stage_") else name,
+            label=text(st, RDFS.label), order=int(one(st, M.order) or 0), component_key=comp_key,
+            filter_value=text(m, M.filter_value) or None, rolls_up_to_kpi=one(st, M.rolls_up_to) is not None,
+        ))
+    stages.sort(key=lambda s: s.order)
+
+    dlvs = list(g.subjects(RDF.type, M.DataLayerVariable))
+    if len(dlvs) > 1:
+        return None, "contains more than one data layer variable"
+    target = one(kpi, M.target)
+
+    spec = JourneySpec(
+        slug=slug, journey_label=text(journey, RDFS.label), journey_owner=text(journey, M.owner) or None,
+        requirement_label=text(req, RDFS.label), requirement_comment=text(req, RDFS.comment),
+        kpi_label=text(kpi, RDFS.label), kpi_formula=text(kpi, M.formula), kpi_owner=text(kpi, M.owner),
+        kpi_target=float(target) if target is not None else None, kpi_comment=text(kpi, RDFS.comment) or None,
+        components=list(own_components.values()), stages=stages,
+        data_layer_variable=text(dlvs[0], RDFS.label) if dlvs else None,
+        data_layer_source_system=(text(dlvs[0], M.source_system) if dlvs else "") or "Web data layer (digitalData)",
+    )
+    return spec, None
 
 
 # ---------------------------------------------------------------------------

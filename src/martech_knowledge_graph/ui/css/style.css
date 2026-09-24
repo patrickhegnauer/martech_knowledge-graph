@@ -387,6 +387,15 @@ button, .btn {
   transition: background-color 0.15s ease;
 }
 
+a.btn {
+  display: inline-block;
+  text-decoration: none;
+}
+
+a.btn:hover {
+  background: var(--accent-hover);
+}
+
 button:hover {
   background: var(--accent-hover);
 }

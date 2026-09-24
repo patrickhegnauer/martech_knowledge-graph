@@ -224,6 +224,16 @@ def create_app(data_dir: Path) -> Flask:
         )
         path.write_text(header + dg.serialize(format="turtle"), encoding="utf-8")
 
+    def existing_component_map(exclude_path=None):
+        """{component key: URI} for every component defined in a data file other than exclude_path."""
+        existing = {}
+        for path, fg in load_instance_file_graphs().items():
+            if exclude_path is not None and path == exclude_path:
+                continue
+            for subj in fg.subjects(RDF.type, MARTECH.Component):
+                existing.setdefault(component_key_from_subject(subj), str(subj))
+        return existing
+
     def find_component_file(key):
         """Returns (path, file_graph, subject) for the component with this key, or (None, None, None)."""
         target = "component_" + key
@@ -607,13 +617,7 @@ def create_app(data_dir: Path) -> Flask:
             with NamedTemporaryFile("w", suffix=".csv", delete=False, newline="", encoding="utf-8") as tmp:
                 tmp.write(csv_text)
                 tmp_path = tmp.name
-            own_file = current_dir() / f"{slug}-instances.ttl"
-            existing = {}
-            for path, fg in load_instance_file_graphs().items():
-                if path == own_file:
-                    continue
-                for subj in fg.subjects(RDF.type, MARTECH.Component):
-                    existing.setdefault(component_key_from_subject(subj), str(subj))
+            existing = existing_component_map(current_dir() / f"{slug}-instances.ttl")
             turtle_text = jb.build_journey_from_csv(
                 tmp_path, xdm_base_url=load_settings()["xdm_base_url"], existing_components=existing
             )
@@ -628,6 +632,126 @@ def create_app(data_dir: Path) -> Flask:
         out_path = current_dir() / f"{slug}-instances.ttl"
         out_path.write_text(turtle_text, encoding="utf-8")
 
+        return jsonify({"ok": True, "slug": slug, "file": out_path.name, "turtle": turtle_text,
+                        "reused_components": reused})
+
+    RESERVED_JOURNEY_SLUGS = {"components", "datalayer"}
+
+    def spec_to_json(spec):
+        return {
+            "slug": spec.slug, "journey_label": spec.journey_label, "journey_owner": spec.journey_owner or "",
+            "requirement_label": spec.requirement_label, "requirement_comment": spec.requirement_comment,
+            "kpi_label": spec.kpi_label, "kpi_formula": spec.kpi_formula, "kpi_owner": spec.kpi_owner,
+            "kpi_target": spec.kpi_target, "kpi_comment": spec.kpi_comment or "",
+            "stages": [
+                {"key": st.key, "label": st.label, "component_key": st.component_key,
+                 "filter_value": st.filter_value or "", "rolls_up_to_kpi": st.rolls_up_to_kpi}
+                for st in spec.stages
+            ],
+            "own_components": [c.key for c in spec.components],
+            "data_layer_variable": spec.data_layer_variable or "",
+        }
+
+    @app.route("/api/journeys/<slug>", methods=["GET"])
+    def api_get_journey(slug):
+        path = current_dir() / f"{slug}-instances.ttl"
+        if slug in RESERVED_JOURNEY_SLUGS or not path.exists():
+            return jsonify({"error": f"no journey '{slug}'"}), 404
+        g = rdflib.Graph()
+        g.parse(path, format="turtle")
+        spec, reason = jb.journey_from_graph(g, slug)
+        if spec is None:
+            return jsonify({"error": f"This journey can't be edited in the form: it {reason}. "
+                                     "Edit its file or regenerate it from a CSV."}), 409
+        return jsonify(spec_to_json(spec))
+
+    @app.route("/api/journeys/save", methods=["POST"])
+    def api_save_journey():
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+
+        body = request.get_json(force=True) or {}
+        editing = body.get("mode") == "edit"
+        slug = (body.get("slug") or "").strip()
+        problems = []
+
+        def need(field, label):
+            value = (body.get(field) or "").strip()
+            if not value:
+                problems.append(f"{label} is required")
+            return value
+
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", slug) or slug in RESERVED_JOURNEY_SLUGS:
+            problems.append("Slug must be lowercase letters, digits, - or _ (and not 'components' or 'datalayer')")
+        journey_label = need("journey_label", "Journey name")
+        requirement_label = need("requirement_label", "Requirement")
+        kpi_label = need("kpi_label", "KPI name")
+        kpi_formula = need("kpi_formula", "KPI formula")
+        kpi_owner = need("kpi_owner", "KPI owner")
+
+        target = body.get("kpi_target")
+        try:
+            kpi_target = float(target) if target not in (None, "") else None
+        except (TypeError, ValueError):
+            kpi_target = None
+            problems.append("KPI target must be a number")
+
+        out_path = current_dir() / f"{slug}-instances.ttl"
+        own_components, dlv, dlv_source = [], None, "Web data layer (digitalData)"
+        if editing:
+            if not out_path.exists():
+                return jsonify({"error": f"no journey '{slug}' to edit"}), 404
+            og = rdflib.Graph()
+            og.parse(out_path, format="turtle")
+            original, reason = jb.journey_from_graph(og, slug)
+            if original is None:
+                return jsonify({"error": f"This journey can't be edited in the form: it {reason}."}), 409
+            own_components = original.components
+            dlv, dlv_source = original.data_layer_variable, original.data_layer_source_system
+        elif out_path.exists() and slug:
+            return jsonify({"error": f"A journey with the slug '{slug}' already exists."}), 409
+
+        available = existing_component_map(out_path)
+        available_keys = set(available) | {c.key for c in own_components}
+
+        stages, used_keys = [], set()
+        for i, row in enumerate(body.get("stages") or [], start=1):
+            label = (row.get("label") or "").strip()
+            comp_key = (row.get("component_key") or "").strip()
+            if not label:
+                problems.append(f"Stage {i}: name is required")
+                continue
+            if comp_key not in available_keys:
+                problems.append(f"Stage {i} ('{label}'): pick a component from the list")
+                continue
+            key = (row.get("key") or "").strip() or jb.slugify(label, "stage")
+            base, n = key, 2
+            while key in used_keys:
+                key, n = f"{base}_{n}", n + 1
+            used_keys.add(key)
+            stages.append(jb.StageSpec(
+                key=key, label=label, order=i, component_key=comp_key,
+                filter_value=(row.get("filter_value") or "").strip() or None,
+                rolls_up_to_kpi=bool(row.get("rolls_up_to_kpi")),
+            ))
+        if not stages and not any("Stage" in p for p in problems):
+            problems.append("Add at least one stage")
+        if problems:
+            return jsonify({"error": "; ".join(problems)}), 400
+
+        spec = jb.JourneySpec(
+            slug=slug, journey_label=journey_label, journey_owner=(body.get("journey_owner") or "").strip() or None,
+            requirement_label=requirement_label, requirement_comment=(body.get("requirement_comment") or "").strip(),
+            kpi_label=kpi_label, kpi_formula=kpi_formula, kpi_owner=kpi_owner, kpi_target=kpi_target,
+            kpi_comment=(body.get("kpi_comment") or "").strip() or None,
+            components=own_components, stages=stages, data_layer_variable=dlv, data_layer_source_system=dlv_source,
+        )
+        turtle_text = jb.build_journey_turtle(
+            spec, xdm_base_url=load_settings()["xdm_base_url"], existing_components=available,
+        )
+        out_path.write_text(turtle_text, encoding="utf-8")
+        reused = sorted({st.component_key for st in stages} & set(available))
         return jsonify({"ok": True, "slug": slug, "file": out_path.name, "turtle": turtle_text,
                         "reused_components": reused})
 

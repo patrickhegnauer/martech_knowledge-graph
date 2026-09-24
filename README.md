@@ -87,7 +87,7 @@ This installs `rdflib`, `flask` and `fastmcp` and adds a `martech-knowledge-grap
 ```
 pip install git+<this-repo-url>@<version-tag>
 ```
-Every push is released as a version tag (`v0.1.3`, ...); pin one for a reproducible install. The running
+Every push is released as a version tag (`v0.1.4`, ...); pin one for a reproducible install. The running
 version is shown in every page's header (next to a **BETA** badge) — it is the version of the server process that
 is actually running, so it also tells you when you need to restart `serve` after an update. The version lives in
 one place, `__version__` in `src/martech_knowledge_graph/__init__.py`.
@@ -231,14 +231,23 @@ status and metric/dimension, and shows the CJA ID, XDM path and data layer varia
 
 ## Adding a new journey
 
-You don't need to hand-write turtle. Three ways in — the first two produce identical output (verified
-byte-for-byte):
+You don't need to hand-write turtle. Four ways in:
 
-**Web UI (recommended)** — paste or upload a CSV on the Journeys page (`martech-knowledge-graph serve`,
-then `/journeys.html`) and click Generate turtle. This runs the same builder below and writes the result
-straight into your data directory.
+**Journey form (recommended)** — Journeys → **New journey**. Fill in the journey, requirement and KPI once,
+then add one row per stage and pick each stage's component from a searchable list of the components you
+already have (synced from CJA and curated). Nothing is retyped: a stage *references* its component, so its
+definition, caveats and context flow in from the Components page. Use a **filter value** when several stages
+share one component (e.g. the same page-name dimension with different page paths), and tick **Rolls up to
+KPI** on the stage(s) that feed the KPI. Existing journeys have an **Edit** link in the table — reorder,
+rename, add or remove stages and save (the journey's file is rewritten from the form). Journeys that contain
+things the form can't preserve (e.g. a `Feature` or several journeys in one file) are refused with a clear
+message instead of being changed. Data layer variables are maintained per component, not in this form.
 
-**Spreadsheet, scripted** — one row per stage; Journey/Requirement/KPI/data-layer columns repeat the same
+**CSV import (Web UI)** — paste or upload a CSV on the Journeys page and click Generate turtle. Handy for
+creating several journeys at once. Runs the same builder below and writes the result straight into your data
+directory.
+
+**CSV, scripted** — one row per stage; Journey/Requirement/KPI/data-layer columns repeat the same
 value on every row; each unique `component_key` only needs its definition/caveats/context filled in once
 even if several stages share it. `journey_builder.write_csv_template(path)` writes an empty template with
 the right headers to start from. Then:

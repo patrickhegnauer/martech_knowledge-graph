@@ -384,6 +384,36 @@ had a stray `"...checkout process!"` (exclamation mark) instead of the intended 
 from early testing, before the demo/org workspace split existed, that had already made it into the
 published repo. Fixed; scanned both bundled example files for any other similar artifacts (none found).
 
+## Journey form (`journey-edit.html`)
+
+Not in the nav; reached via **New journey** / a row's **Edit** link on `journeys.html` (`?slug=` = edit). The
+CSV import stays on `journeys.html` ("Import from CSV") and is unchanged.
+
+- **Form -> API**: `POST /api/journeys/save` with `{mode: new|edit, slug, journey_label, journey_owner,
+  requirement_label/comment, kpi_label/formula/owner/target/comment, stages: [{key?, label, component_key,
+  filter_value, rolls_up_to_kpi}]}`. Validates required fields, slug format (`[a-z0-9][a-z0-9_-]*`, not
+  `components`/`datalayer`), numeric target, at least one stage, and that every `component_key` exists
+  (existing components in other files, or the journey's own legacy components). `new` refuses an existing slug
+  (409). Stage order = row order; stage keys are slugified labels, kept stable for existing rows (renaming a
+  stage keeps its key), de-duplicated with a numeric suffix.
+- **Reuse, not copy**: components in *other* files are referenced by URI via `existing_component_map()` (also
+  used by CSV generation) - curated context flows in. A journey's *own* legacy components are re-emitted from
+  the current file (`ComponentSpec.refs` keeps their full ref URIs verbatim), as is its single legacy
+  `DataLayerVariable`, so editing never drops curated content.
+- **Edit = reverse parse**: `GET /api/journeys/<slug>` runs `journey_builder.journey_from_graph()`, the inverse
+  of `build_journey_turtle`. It refuses (HTTP 409 with the reason) files with node types or properties the
+  builder can't write back (`Feature`, `StageTransition`, unknown predicates, more than one journey/KPI/
+  requirement, a stage with no or several measurements) rather than silently losing them.
+- `_esc()` in the builder now also escapes backslashes and newlines, so multi-line descriptions from the form's
+  textareas produce valid turtle.
+- Picker: `/api/state` components -> datalist "Name - CJA id"; free text is matched back to a component key,
+  unmatched text is flagged and blocks the save.
+
+Verified: API (create/edit/reorder/rename, unknown component, duplicate slug, empty stages, bad target,
+reserved slug, demo mode 403, legacy journey edit keeps its component context and triple count) and in
+headless Edge (auto slug, save, validation, reload, move up, table links). Both demo journeys round-trip
+through the reverse parser with identical triple counts (82/82, 43/43).
+
 ## Version + BETA badge in the header
 
 `js/mode-banner.js` (already on every page) appends a **BETA** badge and, once `/api/state` answers, the
