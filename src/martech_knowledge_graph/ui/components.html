@@ -39,7 +39,6 @@
       <button type="button" id="btn-sync-cja" class="secondary">Sync from CJA</button>
       <span id="cja-connection-status" class="cja-status-line">CJA: not connected</span>
       <input type="text" id="search-components" placeholder="Search components…">
-      <!-- WIRE: filter table rows by name/id as the user types | reuses: none (client-side UI only) -->
       <select id="filter-components">
         <option value="all">All</option>
         <option value="with-context">With context</option>
@@ -47,7 +46,7 @@
         <option value="metrics">Metrics</option>
         <option value="dimensions">Dimensions</option>
       </select>
-      <!-- WIRE: filter table rows by context status / component_type | reuses: martech-ontology.ttl component_type, definition/caveats/context/owner presence -->
+      <span id="filter-count" class="cja-status-line"></span>
     </div>
 
     <div class="table-scroll">
@@ -190,7 +189,34 @@ function renderComponentsTable(components) {
     tr.appendChild(editTd);
     tbody.appendChild(tr);
   });
+  applyFilters();
 }
+
+function applyFilters() {
+  const query = document.getElementById("search-components").value.trim().toLowerCase();
+  const filter = document.getElementById("filter-components").value;
+  const rows = document.querySelectorAll("#table-components tbody tr");
+  let shown = 0;
+  rows.forEach(tr => {
+    const cells = tr.querySelectorAll("td");
+    const type = cells[1].textContent.trim();
+    const hasContext = !!tr.querySelector(".badge-has-context");
+    const matchesText = !query || [0, 2, 3].some(i => cells[i].textContent.toLowerCase().includes(query));
+    const matchesFilter =
+      filter === "all" ||
+      (filter === "with-context" && hasContext) ||
+      (filter === "missing-context" && !hasContext) ||
+      (filter === "metrics" && type === "metric") ||
+      (filter === "dimensions" && type === "dimension");
+    const visible = matchesText && matchesFilter;
+    tr.hidden = !visible;
+    if (visible) shown++;
+  });
+  document.getElementById("filter-count").textContent = "Showing " + shown + " of " + rows.length;
+}
+
+document.getElementById("search-components").addEventListener("input", applyFilters);
+document.getElementById("filter-components").addEventListener("change", applyFilters);
 
 function loadLiveState() {
   const note = document.getElementById("live-mode-note");
