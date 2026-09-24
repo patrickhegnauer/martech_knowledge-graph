@@ -79,7 +79,7 @@
       </div>
       <button type="button" id="btn-add-ref" class="secondary">Add reference row</button>
 
-      <h3>Data layer variables (martech:maps_to)</h3>
+      <h3>Data Layer Variables (martech:maps_to)</h3>
       <p class="note">The raw implementation variable(s) that populate this component, e.g. <code>digitalData.page.pageInfo.pageName</code>. Rows marked <em>from journey</em> come from a generated journey file and are read-only here.</p>
       <div class="table-scroll">
         <table id="table-dlv">
@@ -90,7 +90,7 @@
         </table>
       </div>
       <datalist id="dlv-suggestions"></datalist>
-      <button type="button" id="btn-add-dlv" class="secondary">Add data layer variable</button>
+      <button type="button" id="btn-add-dlv" class="secondary">Add Data Layer Variable</button>
 
       <p>
         <button type="button" id="btn-save-component">Save</button>
@@ -118,7 +118,7 @@ martech:component_product_views
   martech:refs &lt;https://sandbox/champion/xdm/commerce.productViews.value&gt; .
       </pre>
     </div>
-    <p class="note">This preview is regenerated from the server's response after Save — it's the actual turtle now on disk for this component, not a static example, whenever the local API is reachable.</p>
+    <p class="note">This preview is regenerated from the server's response after Save — it's the actual turtle now saved for this component, not a static example, whenever the local API is reachable.</p>
   </section>
 </main>
 <footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running — see components.html for setup. Falls back to a static example otherwise.</footer>
@@ -247,7 +247,7 @@ document.getElementById("btn-save-component").addEventListener("click", () => {
     .then(r => r.json().then(data => ({ ok: r.ok, data })))
     .then(({ ok, data }) => {
       if (!ok) throw new Error(data.error || "save failed");
-      statusEl.textContent = "Saved — written to disk.";
+      statusEl.textContent = "Saved.";
       document.getElementById("turtle-preview").textContent = data.turtle;
     })
     .catch(err => {

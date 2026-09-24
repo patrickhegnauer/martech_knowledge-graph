@@ -147,7 +147,7 @@ function loadLiveJourneys() {
     .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
     .then(data => {
       renderJourneysTable(data.journeys);
-      note.textContent = "Live data — " + data.journeys.length + " journey file(s) on disk.";
+      note.textContent = "Live data — " + data.journeys.length + " journey file(s).";
     })
     .catch(() => {
       note.textContent = "Showing static sample data — start the local API (`martech-knowledge-graph serve`) for live data.";

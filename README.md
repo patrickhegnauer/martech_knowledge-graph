@@ -218,7 +218,7 @@ Every component (from a CJA sync or from a journey) is edited from its **Edit** 
 - **Business context** — `definition`, `caveats`, `context`, `owner`. Context coverage counts a component as
   covered once all four are filled in.
 - **References** — the CJA and XDM pointers above, plus any you add.
-- **Data layer variables** — the raw implementation variable(s) that populate the component (name + source
+- **Data Layer Variables** — the raw implementation variable(s) that populate the component (name + source
   system, several allowed). Stored in `datalayer-instances.ttl` using `martech:maps_to`, separate from
   journey files so regenerating a journey never overwrites them. An existing variable name is reused, not
   duplicated; mappings that come from a journey show as read-only "from journey".
