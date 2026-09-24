@@ -1,14 +1,14 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Components â€” Martech Knowledge Graph</title>
+<title>Components — Martech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <header class="site-header">
-  <h1>Martech Knowledge Graph â€” Maintenance Platform</h1>
+  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
 </header>
 <nav class="site-nav">
   <ul>
@@ -26,11 +26,11 @@
   <section>
     <h2>Components</h2>
     <p>Metrics and dimensions pulled from the CJA semantic layer, curated with business context here.</p>
-    <p class="note" id="live-mode-note">Checking for a local APIâ€¦</p>
+    <p class="note" id="live-mode-note">Checking for a local API…</p>
 
     <div class="counters">
       <div class="counter">
-        <span class="value" id="context-coverage-value">â€”</span>
+        <span class="value" id="context-coverage-value">—</span>
         <span class="label">Context coverage</span>
       </div>
     </div>
@@ -38,7 +38,7 @@
     <div class="toolbar">
       <button type="button" id="btn-sync-cja" class="secondary">Sync from CJA</button>
       <span id="cja-connection-status" class="cja-status-line">CJA: not connected</span>
-      <input type="text" id="search-components" placeholder="Search componentsâ€¦">
+      <input type="text" id="search-components" placeholder="Search components…">
       <select id="filter-components">
         <option value="all">All</option>
         <option value="with-context">With context</option>
@@ -135,7 +135,7 @@
         <input type="text" id="cja-client-id" name="client_id" autocomplete="off">
 
         <label for="cja-client-secret">Client secret</label>
-        <input type="password" id="cja-client-secret" name="client_secret" autocomplete="off" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢">
+        <input type="password" id="cja-client-secret" name="client_secret" autocomplete="off" placeholder="••••••••••••">
 
         <label for="cja-org-id">Organization ID</label>
         <input type="text" id="cja-org-id" name="org_id" autocomplete="off" placeholder="e.g. 1A2B3C4D5E6F@AdobeOrg">
@@ -152,7 +152,7 @@
     </div>
 
     <div id="cja-step-dataview" hidden>
-      <p class="cja-status-line connected">Connected â€” org <span id="cja-connected-org"></span></p>
+      <p class="cja-status-line connected">Connected — org <span id="cja-connected-org"></span></p>
       <label for="cja-dataview-select">Data view to sync</label>
       <select id="cja-dataview-select"></select>
       <p>
@@ -174,7 +174,7 @@ function renderComponentsTable(components) {
   components.forEach(c => {
     const tr = document.createElement("tr");
     tr.dataset.componentId = c.key;
-    [[c.name, "cell-wrap"], [c.type, ""], [c.cja_id, "cell-truncate"], [c.xdm_path || "â€”", "cell-truncate"], [c.owner || "â€”", "cell-wrap"]].forEach(([text, cls]) => {
+    [[c.name, "cell-wrap"], [c.type, ""], [c.cja_id, "cell-truncate"], [c.xdm_path || "—", "cell-truncate"], [c.owner || "—", "cell-wrap"]].forEach(([text, cls]) => {
       const td = document.createElement("td");
       td.textContent = text;
       td.title = text;
@@ -231,12 +231,12 @@ function loadLiveState() {
     .then(data => {
       renderComponentsTable(data.components);
       updateContextCoverage();
-      note.textContent = "Live data â€” " + data.triple_count + " triples across " + data.journeys.length + " journey file(s).";
+      note.textContent = "Live data — " + data.triple_count + " triples across " + data.journeys.length + " journey file(s).";
       return true;
     })
     .catch(() => {
       updateContextCoverage();
-      note.textContent = "Showing static sample data â€” start the local API (martech-knowledge-graph serve) for live data.";
+      note.textContent = "Showing static sample data — start the local API (martech-knowledge-graph serve) for live data.";
       return false;
     });
 }
@@ -270,7 +270,7 @@ function api(path, options) {
 function refreshToolbarStatus() {
   const el = document.getElementById("cja-connection-status");
   if (cjaConfig.configured) {
-    el.textContent = "CJA: configured â€” org " + cjaConfig.org_id;
+    el.textContent = "CJA: configured — org " + cjaConfig.org_id;
     el.classList.add("connected");
   } else {
     el.textContent = "CJA: not connected";
@@ -290,7 +290,7 @@ function showConfigStep() {
   document.getElementById("cja-org-id").value = cjaConfig.org_id || "";
   document.getElementById("cja-scopes").value = cjaConfig.scopes || "";
   document.getElementById("cja-client-secret").value = "";
-  document.getElementById("cja-client-secret").placeholder = cjaConfig.configured ? "(saved â€” leave empty to keep)" : "â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢";
+  document.getElementById("cja-client-secret").placeholder = cjaConfig.configured ? "(saved — leave empty to keep)" : "••••••••••••";
   errorEl.style.display = "none";
 }
 
@@ -302,7 +302,7 @@ function showDataviewStep() {
   const select = document.getElementById("cja-dataview-select");
   select.innerHTML = "";
   select.disabled = true;
-  resultEl.textContent = "Loading data viewsâ€¦";
+  resultEl.textContent = "Loading data views…";
   resultEl.style.display = "block";
   api("/api/cja/dataviews")
     .then(data => {
@@ -313,7 +313,7 @@ function showDataviewStep() {
         select.appendChild(opt);
       });
       select.disabled = data.data_views.length === 0;
-      resultEl.textContent = data.data_views.length ? "" : "No data views are visible to this credential â€” check its product profile.";
+      resultEl.textContent = data.data_views.length ? "" : "No data views are visible to this credential — check its product profile.";
       resultEl.style.display = data.data_views.length ? "none" : "block";
     })
     .catch(err => { resultEl.textContent = "Could not load data views: " + err.message; });
@@ -332,7 +332,7 @@ document.getElementById("btn-cja-connect").addEventListener("click", () => {
   const button = document.getElementById("btn-cja-connect");
   errorEl.style.display = "none";
   button.disabled = true;
-  button.textContent = "Connectingâ€¦";
+  button.textContent = "Connecting…";
   api("/api/cja/config", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -363,7 +363,7 @@ document.getElementById("btn-cja-sync").addEventListener("click", () => {
   if (!select.value) return;
   const label = select.options[select.selectedIndex].textContent;
   const button = document.getElementById("btn-cja-sync");
-  resultEl.textContent = "Syncing " + label + "â€¦";
+  resultEl.textContent = "Syncing " + label + "…";
   resultEl.style.display = "block";
   button.disabled = true;
 
@@ -377,11 +377,11 @@ document.getElementById("btn-cja-sync").addEventListener("click", () => {
       updateContextCoverage();
       const total = data.added.metric + data.added.dimension;
       const extra = (data.enriched ? " Added XDM paths/descriptions to " + data.enriched + " existing components." : "") +
-        (data.xdm_base_url_is_default ? " Note: your XDM base URL is still the placeholder (" + data.xdm_base_url + ") â€” set it on the Journeys page so XDM references point to your sandbox." : "");
+        (data.xdm_base_url_is_default ? " Note: your XDM base URL is still the placeholder (" + data.xdm_base_url + ") — set it on the Journeys page so XDM references point to your sandbox." : "");
       resultEl.textContent = (total
         ? "Synced " + label + ": " + data.added.metric + " new metrics and " + data.added.dimension + " new dimensions added to components-instances.ttl" +
           (data.skipped ? " (" + data.skipped + " already existed and were left untouched)." : ".")
-        : "Synced " + label + ": nothing new â€” all " + data.total_pulled + " components already exist.") + extra;
+        : "Synced " + label + ": nothing new — all " + data.total_pulled + " components already exist.") + extra;
     })
     .catch(err => { resultEl.textContent = "Sync failed: " + err.message; })
     .finally(() => { button.disabled = false; });
