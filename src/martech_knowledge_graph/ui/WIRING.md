@@ -120,6 +120,13 @@ implemented in `cja_client.py` (stdlib `urllib`, no extra dependency) and the `/
   exists anywhere in the workspace, so re-syncing is idempotent and curated context is safe. A metric and
   dimension with the same key get a `_metric`/`_dimension` suffix instead of colliding. New components
   start with empty context, so context coverage shows what's left to curate.
+- **Two references per component + description**: sync requests `expansion=schemaPath` (verified against a
+  real tenant: without it CJA returns no path). Each component gets `martech:refs` (1) the `urn:cja:` pointer
+  and (2) the XDM field, `<xdm_base_url><schemaPath>` (same setting journeys use), only when CJA reports a real
+  path -- derived fields report the literal "Derived Fields" and get none (~30% of dimensions in the tested
+  data view). CJA `description` is stored as `rdfs:comment` and shown in the edit page's read-only block.
+  Re-syncing enriches already-synced components by **adding** a missing XDM ref/description; curated fields
+  are never touched. The sync result warns if the XDM base URL is still the `SANDBOX_NAME` placeholder.
 - Bearer tokens are cached in memory until shortly before expiry. Requests carry `Authorization`,
   `x-api-key` and `x-gw-ims-org-id`. All CJA/IMS errors are surfaced as readable messages (HTTP 502 from the
   local API), never including the secret.

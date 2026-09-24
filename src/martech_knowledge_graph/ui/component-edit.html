@@ -139,6 +139,8 @@ if (componentKey) {
       document.getElementById("ro-name").textContent = data.name;
       document.getElementById("ro-cja-id").textContent = data.cja_id;
       document.getElementById("ro-type").textContent = data.type;
+      document.getElementById("ro-dataview").textContent = data.data_view_id || "—";
+      document.getElementById("ro-description").textContent = data.cja_description || "—";
       document.getElementById("field-definition").value = data.definition;
       document.getElementById("field-caveats").value = data.caveats;
       document.getElementById("field-context").value = data.context;
@@ -146,7 +148,7 @@ if (componentKey) {
 
       document.getElementById("refs-tbody").innerHTML = "";
       if (data.refs.length === 0) addRefRow("", "");
-      data.refs.forEach(url => addRefRow("Reference", url));
+      data.refs.forEach(url => addRefRow(url.startsWith("urn:cja:") ? "CJA component" : "XDM field / reference", url));
     })
     .catch(() => {
       document.getElementById("live-mode-note").textContent =

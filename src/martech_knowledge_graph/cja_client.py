@@ -12,6 +12,7 @@ CJA_BASE_URL = "https://cja.adobe.io"
 DEFAULT_SCOPES = "openid,AdobeID,read_organizations,additional_info.projectedProductContext"
 PAGE_SIZE = 1000
 MAX_PAGES = 50
+XDM_PATH_RE = re.compile(r"[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*")
 
 
 class CjaError(Exception):
@@ -72,11 +73,11 @@ class CjaClient:
             "Accept": "application/json",
         })
 
-    def _get_all(self, path):
+    def _get_all(self, path, extra_params=None):
         """Collect every item, tolerating either a bare list or a {"content": [...]} page envelope."""
         items, seen = [], set()
         for page in range(MAX_PAGES):
-            result = self._get(path, {"limit": PAGE_SIZE, "page": page})
+            result = self._get(path, {"limit": PAGE_SIZE, "page": page, **(extra_params or {})})
             batch = result.get("content", []) if isinstance(result, dict) else (result or [])
             new = [i for i in batch if isinstance(i, dict) and i.get("id") not in seen]
             if not new:
@@ -92,14 +93,24 @@ class CjaClient:
         return [{"id": d["id"], "name": d.get("name") or d["id"]} for d in self._get_all("/data/dataviews")]
 
     def list_components(self, data_view_id):
-        """[{"id", "name", "type": "metric"|"dimension"}] for one data view."""
+        """[{"id", "name", "type", "description", "schema_path"}] for one data view.
+
+        schema_path is the XDM field path CJA reports for the component, or "" when there is none
+        (derived fields report the literal "Derived Fields", which is not a path and is dropped)."""
         dv = urllib.parse.quote(data_view_id, safe="")
         out = []
         for kind, ctype in (("metrics", "metric"), ("dimensions", "dimension")):
-            for item in self._get_all(f"/data/dataviews/{dv}/{kind}"):
+            for item in self._get_all(f"/data/dataviews/{dv}/{kind}", {"expansion": "schemaPath"}):
                 cid = item.get("id")
                 if cid:
-                    out.append({"id": cid, "name": item.get("name") or item.get("title") or cid, "type": ctype})
+                    schema_path = item.get("schemaPath") or ""
+                    out.append({
+                        "id": cid,
+                        "name": item.get("name") or item.get("title") or cid,
+                        "type": ctype,
+                        "description": (item.get("description") or "").strip(),
+                        "schema_path": schema_path if XDM_PATH_RE.fullmatch(schema_path) else "",
+                    })
         return out
 
 

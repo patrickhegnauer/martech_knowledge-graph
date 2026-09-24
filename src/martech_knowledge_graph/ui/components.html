@@ -370,10 +370,12 @@ document.getElementById("btn-cja-sync").addEventListener("click", () => {
       renderComponentsTable(data.state.components);
       updateContextCoverage();
       const total = data.added.metric + data.added.dimension;
-      resultEl.textContent = total
+      const extra = (data.enriched ? " Added XDM paths/descriptions to " + data.enriched + " existing components." : "") +
+        (data.xdm_base_url_is_default ? " Note: your XDM base URL is still the placeholder (" + data.xdm_base_url + ") — set it on the Journeys page so XDM references point to your sandbox." : "");
+      resultEl.textContent = (total
         ? "Synced " + label + ": " + data.added.metric + " new metrics and " + data.added.dimension + " new dimensions added to components-instances.ttl" +
           (data.skipped ? " (" + data.skipped + " already existed and were left untouched)." : ".")
-        : "Synced " + label + ": nothing new — all " + data.total_pulled + " components already exist.";
+        : "Synced " + label + ": nothing new — all " + data.total_pulled + " components already exist.") + extra;
     })
     .catch(err => { resultEl.textContent = "Sync failed: " + err.message; })
     .finally(() => { button.disabled = false; });

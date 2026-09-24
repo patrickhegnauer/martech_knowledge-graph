@@ -256,6 +256,8 @@ def create_app(data_dir: Path) -> Flask:
             "context": str(context) if context else "",
             "owner": str(owner) if owner else "",
             "refs": refs,
+            "cja_description": str(g.value(s, RDFS.comment) or ""),
+            "data_view_id": next((r[len(CJA_URN_PREFIX):].split(":", 1)[0] for r in refs if r.startswith(CJA_URN_PREFIX)), ""),
             "source_file": path.name,
         })
 
@@ -411,13 +413,31 @@ def create_app(data_dir: Path) -> Flask:
         g.bind("data", cja_ns)
         g.bind("rdfs", RDFS)
 
+        xdm_base_url = load_settings()["xdm_base_url"]
+        subject_by_ref = {str(o): s for s in g.subjects(RDF.type, MARTECH.Component) for o in g.objects(s, MARTECH.refs)}
+
         added = {"metric": 0, "dimension": 0}
         skipped = 0
+        enriched = 0
         for comp in pulled:
             ref = f"{CJA_URN_PREFIX}{dv_id}:{comp['id']}"
+            xdm_ref = rdflib.URIRef(xdm_base_url + comp["schema_path"]) if comp["schema_path"] else None
             key = cja_client.component_key(comp["id"])
             if key in known_types and known_types[key] != comp["type"]:
                 key += "_" + comp["type"]
+            if ref in subject_by_ref:
+                # Already synced: only ever ADD what is missing, never touch curated fields.
+                subject = subject_by_ref[ref]
+                changed = False
+                if xdm_ref is not None and (subject, MARTECH.refs, xdm_ref) not in g:
+                    g.add((subject, MARTECH.refs, xdm_ref))
+                    changed = True
+                if comp["description"] and g.value(subject, RDFS.comment) is None:
+                    g.add((subject, RDFS.comment, rdflib.Literal(comp["description"])))
+                    changed = True
+                enriched += changed
+                skipped += 1
+                continue
             if ref in known_refs or key in known_types:
                 skipped += 1
                 continue
@@ -428,9 +448,13 @@ def create_app(data_dir: Path) -> Flask:
             g.add((subject, RDFS.label, rdflib.Literal(comp["name"])))
             g.add((subject, MARTECH.component_type, rdflib.Literal(comp["type"])))
             g.add((subject, MARTECH.refs, rdflib.URIRef(ref)))
+            if xdm_ref is not None:
+                g.add((subject, MARTECH.refs, xdm_ref))
+            if comp["description"]:
+                g.add((subject, RDFS.comment, rdflib.Literal(comp["description"])))
             added[comp["type"]] += 1
 
-        if sum(added.values()):
+        if sum(added.values()) or enriched:
             header = (
                 "# ==========================================================================\n"
                 "# Components synced from CJA, not yet bound to any journey.\n"
@@ -441,7 +465,9 @@ def create_app(data_dir: Path) -> Flask:
             sync_file.write_text(header + g.serialize(format="turtle"), encoding="utf-8")
 
         return jsonify({
-            "added": added, "skipped": skipped, "total_pulled": len(pulled), "state": collect_state(),
+            "added": added, "skipped": skipped, "enriched": enriched, "total_pulled": len(pulled),
+            "xdm_base_url": xdm_base_url, "xdm_base_url_is_default": xdm_base_url == jb.DEFAULT_XDM_BASE_URL,
+            "state": collect_state(),
         })
 
     @app.route("/api/journeys/generate", methods=["POST"])
