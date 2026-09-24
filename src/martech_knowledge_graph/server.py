@@ -149,11 +149,19 @@ def create_app(data_dir: Path) -> Flask:
         caveats = merged_graph.value(subject, MARTECH.caveats)
         context = merged_graph.value(subject, MARTECH.context)
         has_context = bool(definition and caveats and context and owner)
+        refs = [str(o) for o in merged_graph.objects(subject, MARTECH.refs)]
+        xdm_refs = sorted(r for r in refs if not r.startswith(CJA_URN_PREFIX))
+        base = load_settings()["xdm_base_url"]
+        xdm_path = ""
+        if xdm_refs:
+            xdm_path = xdm_refs[0][len(base):] if xdm_refs[0].startswith(base) else xdm_refs[0].rsplit("/", 1)[-1]
         return {
             "key": key,
             "name": label,
             "type": ctype,
-            "cja_id": cja_component_id(key, ctype, [str(o) for o in merged_graph.objects(subject, MARTECH.refs)]),
+            "cja_id": cja_component_id(key, ctype, refs),
+            "xdm_path": xdm_path,
+            "xdm_ref": xdm_refs[0] if xdm_refs else "",
             "owner": str(owner) if owner else "",
             "has_context": has_context,
         }
