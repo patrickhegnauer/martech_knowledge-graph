@@ -209,8 +209,7 @@ how the pieces above are wired together, though none of the endpoint contracts o
   (`cli.py`) can bind it to a caller-chosen data directory. Every place that used to glob
   `SCRIPT_DIR / "*-instances.ttl"` now globs the passed-in `data_dir` instead. The ontology stays pinned
   to the bundled `ontology/martech-ontology.ttl` inside the installed package — it's never read from or
-  written to a user's data directory, consistent with the "no ontology changes" decision from the
-  original handoff doc.
+  written to a user's data directory, consistent with keeping the ontology itself out of per-org customization.
 - **The server now serves the UI itself**: `Flask(__name__, static_folder=<bundled ui/>, static_url_path="")`
   plus an explicit `/` route for `index.html`. Confirmed `/api/*` routes are not shadowed by the static
   catch-all (Werkzeug prioritizes the exact route). This means `ui/*.html` pages are normally reached via
@@ -319,7 +318,7 @@ typing, save, and the demo-mode-blocked error message all correct.
 
 ## MCP server: `martech-knowledge-graph mcp` (new)
 
-The piece the original handoff doc sequenced last, built now that the authoring loop is trusted. Runs as
+Deliberately built after the authoring loop itself was trusted, since it's the one piece with no existing implementation to adapt. Runs as
 a **second, independent process** alongside `server.py` — Flask is WSGI, FastMCP's HTTP transport is
 ASGI, so mixing them in one process would fight both frameworks for no real benefit. `mcp.html` documents
 this; it's CLI-only for now (`martech-knowledge-graph mcp`), no page button yet.

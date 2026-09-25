@@ -159,7 +159,7 @@ pick based on your client:
   get a `https://<name>.fastmcp.app/mcp` URL. This project hosts nothing; each org deploys its own. The data
   is a snapshot: re-export and push to update. `--demo` exports the bundled demo data for a test deploy.
 
-Two tools, per the original handoff doc's "single doorway" principle:
+Two tools, per the "single doorway" principle: one query interface, not several that could give contradictory answers to the same question:
 
 - **`run_sparql(query)`** — read-only (SELECT/ASK/CONSTRUCT/DESCRIBE only). This isn't enforced by
   filtering the query text: only `rdflib.Graph.query()` is ever called, never `.query()`'s write
