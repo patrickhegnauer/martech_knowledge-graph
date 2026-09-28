@@ -40,10 +40,8 @@
             <label><input type="checkbox" name="class-filter" value="KPI" checked> KPI</label>
             <label><input type="checkbox" name="class-filter" value="Journey" checked> Journey</label>
             <label><input type="checkbox" name="class-filter" value="Stage" checked> Stage</label>
-            <label><input type="checkbox" name="class-filter" value="Feature" checked> Feature</label>
             <label><input type="checkbox" name="class-filter" value="Component" checked> Component</label>
             <label><input type="checkbox" name="class-filter" value="DataLayerVariable" checked> DataLayerVariable</label>
-            <label><input type="checkbox" name="class-filter" value="StageTransition"> StageTransition</label>
             <label><input type="checkbox" name="class-filter" value="Measurement"> Measurement</label>
           </div>
 
@@ -80,8 +78,7 @@ const EMBEDDED_DATA = {"nodes": [{"id": "https://example.org/martech/data/login/
 
 const GROUP_COLORS = {
   Requirement: "#F0997B", KPI: "#5DCAA5", Journey: "#EF9F27", Stage: "#F0997B",
-  Feature: "#AFA9EC", Component: "#7F77DD", DataLayerVariable: "#ED93B1",
-  Measurement: "#B4B2A9", StageTransition: "#B4B2A9"
+  Component: "#7F77DD", DataLayerVariable: "#ED93B1", Measurement: "#B4B2A9"
 };
 
 function populateJourneySelect(data) {
@@ -106,7 +103,7 @@ function initGraph(data) {
     label: n.label,
     title: n.group,
     color: { background: GROUP_COLORS[n.group] || "#B4B2A9", border: "#ffffff" },
-    shape: (n.group === "Measurement" || n.group === "StageTransition") ? "diamond" : "box",
+    shape: n.group === "Measurement" ? "diamond" : "box",
     font: { size: 12, color: "#1a1a18" },
   })));
 

@@ -1,8 +1,14 @@
-# Unified Martech Knowledge Graph (MVP)
+# Martech Knowledge Graph
 
-A small, working example of a knowledge graph for martech data — built as an RDFS ontology in Turtle, served through a web UI with a live interactive graph view and a SPARQL query page. This is the companion code for a blog series on modeling business meaning (journeys, KPIs, requirements) alongside technical metadata (XDM components, data layer variables) as one connected graph.
+A maintenance platform for a martech knowledge graph: it connects the metrics and dimensions in Adobe
+Customer Journey Analytics (CJA) to the business context around them — what a component actually means,
+its caveats, who owns it, which journeys and KPIs it feeds — the kind of meaning CJA's own technical
+metadata has no field for. A local web UI and API pull components from CJA, let you curate that context,
+author journeys, and browse or query the resulting graph; a separate MCP server exposes the same graph to
+LLMs and agents.
 
-All data in this repo is generic example content (Adobe Experience Platform's public Champion sandbox) — not tied to any specific company.
+No database — the graph is an RDFS ontology in Turtle, with your own data stored as flat, human-readable
+`.ttl` files you can read, diff, and back up like any other text.
 
 ## Architecture
 
@@ -59,7 +65,7 @@ what.
 | Path | What it is |
 |---|---|
 | `pyproject.toml` | Package definition — `pip install .` (or `pip install -e .` for local dev) installs the `martech-knowledge-graph` command |
-| `src/martech_knowledge_graph/ontology/martech-ontology.ttl` | The schema: node classes (`Requirement`, `KPI`, `Journey`, `Stage`, `Feature`, `Component`, `DataLayerVariable`) and the predicates connecting them |
+| `src/martech_knowledge_graph/ontology/martech-ontology.ttl` | The schema: node classes (`Requirement`, `KPI`, `Journey`, `Stage`, `Component`, `DataLayerVariable`) and the predicates connecting them |
 | `src/martech_knowledge_graph/examples/*.ttl` | Bundled example journey data (a 4-step ecommerce funnel, a 2-step login flow) — this is the **demo** workspace itself (read-only), toggled on/off with the rest of the UI's data-mode switcher, not copied anywhere |
 | `src/martech_knowledge_graph/graph_explorer.py` | Internal library `server.py` and `mcp_server.py` use to load the graph and extract data from it — not a standalone tool |
 | `src/martech_knowledge_graph/journey_builder.py` | Generates correct turtle from structured input (a spreadsheet or Python), instead of hand-writing it |
@@ -99,11 +105,12 @@ martech-knowledge-graph serve
 ```
 
 Then open **http://127.0.0.1:5055/** — this is the primary way to use this project (see
-[Web UI](#web-ui) below). It opens in **demo mode**: the bundled example data (read-only), with a banner
-on every page and a switcher in the top right. Click **Switch to your data** whenever you're ready — that
-flips to your own, separate data directory (starts empty; Home turns into a live kickstart checklist for
-what's left to set up). Switching is instant and non-destructive either direction; nothing is copied or
-deleted, the two are genuinely separate workspaces.
+[Web UI](#web-ui) below). It opens with a **bundled sample workspace** (read-only) so you can try the
+whole workflow — components, journeys, the graph, SPARQL — before connecting anything real; a banner and
+a switcher in the top right make that state obvious everywhere. Click **Switch to your data** whenever
+you're ready — that flips to your own, separate data directory (starts empty; Home turns into a live
+kickstart checklist for what's left to set up). Switching is instant and non-destructive either direction;
+nothing is copied or deleted, the two are genuinely separate workspaces.
 
 Options:
 ```
@@ -179,6 +186,13 @@ server reflects it immediately, no restart. `--data-dir`, `--host`, `--port` opt
 This is a CLI command today; a one-click "Generate MCP" button on the web UI's MCP page that starts it as
 a background process and shows you the URL is a deliberate next step, not built yet.
 
+**Skill files for your agent** — the MCP page's "Generate a skill for your org" button drafts a skill file
+grounded in your live data: the real ontology schema and the example queries run against your graph right
+now, with their actual row counts. It's a starting point, not a finished one — the closing "Things to get
+right" section is for your organization's real gotchas, filled in by hand or with your own LLM (this app
+has no built-in AI to write that part). Saved per-org to `<data_dir>/skills/<name>.md`, never to this
+repo — the root `SKILL.md` stays the bundled demo workspace's own example.
+
 ## Web UI
 
 The web UI covers the whole loop: pull components, curate their business context, author journeys,
@@ -221,6 +235,9 @@ Every component (from a CJA sync or from a journey) is edited from its **Edit** 
 - **Business context** — `definition`, `caveats`, `context`, `owner`. Context coverage counts a component as
   covered once all four are filled in.
 - **References** — the CJA and XDM pointers above, plus any you add.
+- **Governance** — `is_pii` (checkbox) and `governance_notes` (free text: consent requirements, retention,
+  or other compliance-relevant context). Not counted toward context coverage; nothing sets these
+  automatically, including CJA sync.
 - **Data Layer Variables** — the raw implementation variable(s) that populate the component (name + source
   system, several allowed). Stored in `datalayer-instances.ttl` using `martech:maps_to`, separate from
   journey files so regenerating a journey never overwrites them. An existing variable name is reused, not
@@ -240,7 +257,7 @@ definition, caveats and context flow in from the Components page. Use a **filter
 share one component (e.g. the same page-name dimension with different page paths), and tick **Rolls up to
 KPI** on the stage(s) that feed the KPI. Existing journeys have an **Edit** link in the table — reorder,
 rename, add or remove stages and save (the journey's file is rewritten from the form). Journeys that contain
-things the form can't preserve (e.g. a `Feature` or several journeys in one file) are refused with a clear
+things the form can't preserve (e.g. an unknown property or several journeys in one file) are refused with a clear
 message instead of being changed. Data layer variables are maintained per component, not in this form.
 
 **CSV import (Web UI)** — paste or upload a CSV on the Journeys page and click Generate turtle. Handy for
@@ -281,8 +298,8 @@ thing as an `xdm_base_url` argument.
 
 ## Ontology overview
 
-- **Requirement → KPI → Journey → Stage → Feature → Component → DataLayerVariable** is the core chain, from business question down to raw implementation.
-- **`Measurement`** and **`StageTransition`** are relation nodes, not "real" entities — RDF predicates can't carry their own attributes (like a conversion rate or a filter value), so these exist specifically to hold that data. See the ontology file's comments for the full reasoning.
+- **Requirement → KPI → Journey → Stage → Component → DataLayerVariable** is the core chain, from business question down to raw implementation.
+- **`Measurement`** is a relation node, not a "real" entity — a plain RDF predicate can't carry its own attribute (like a filter value), so it exists specifically to hold that data. See the ontology file's comments for the full reasoning.
 - Every `Component` carries business meaning (`definition`, `caveats`, `context`, `owner`) directly on the node — the thing a platform's own technical metadata graph (e.g. Adobe's native schema/catalog graph) structurally can't hold, since there's no such thing as a "business meaning" field on a raw schema object.
 
 ## Status
@@ -310,11 +327,16 @@ thing as an `xdm_base_url` argument.
   Components table.
 - ✅ Data layer variables per component (`martech:maps_to`), and journeys reusing already-curated components
   by key instead of duplicating them.
+- ✅ Basic data governance per component — `is_pii` and `governance_notes`. Nothing sets these
+  automatically (not CJA sync, not the ontology); it's a manual curation field, same as `caveats`.
 - ✅ Hosted MCP: `martech-knowledge-graph export-mcp` scaffolds a deployable folder for Prefect Horizon
   (each org deploys its own; this project hosts nothing). The actual Horizon deploy hasn't been verified
   end-to-end by us yet.
 - ⏳ Not yet built: dedicated CJA support for calculated metrics/segments, and handling of components that
   disappear from CJA (they keep their stored context)
+- ✅ Ontology trimmed to what's actually populated — removed `Feature`/`StageTransition` and their
+  properties (declared but never instantiated by anything, including the bundled demo data), and wired up
+  `entry_criteria` on `Stage` (was declared but unused) with a real form field.
 
 ## License
 

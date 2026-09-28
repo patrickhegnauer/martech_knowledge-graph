@@ -59,14 +59,14 @@
       <textarea id="field-kpi-comment" rows="2"></textarea>
 
       <h3>Stages</h3>
-      <p class="note">One row per step of the journey, in order. Each stage is measured by a component you already have — its definition, caveats and context come from the component itself (edit those on the Components page). Set a <strong>filter value</strong> when several stages share one component (e.g. the same page-name dimension, different page paths). Data layer variables are maintained per component, not here.</p>
+      <p class="note">One row per step of the journey, in order. Each stage is measured by a component you already have — its definition, caveats and context come from the component itself (edit those on the Components page). Set a <strong>filter value</strong> when several stages share one component (e.g. the same page-name dimension, different page paths), and optionally <strong>entry criteria</strong> to spell out exactly what counts as reaching this stage (e.g. which page, or "at least 2 items in cart"). Data layer variables are maintained per component, not here.</p>
       <div class="table-scroll">
         <table id="table-stages" class="table-fixed">
           <colgroup>
-            <col style="width:4%"><col style="width:24%"><col style="width:32%"><col style="width:18%"><col style="width:8%"><col style="width:14%">
+            <col style="width:3%"><col style="width:16%"><col style="width:22%"><col style="width:11%"><col style="width:15%"><col style="width:7%"><col style="width:14%">
           </colgroup>
           <thead>
-            <tr><th>#</th><th>Stage name</th><th>Component</th><th>Filter value</th><th>Rolls up to KPI</th><th></th></tr>
+            <tr><th>#</th><th>Stage name</th><th>Component</th><th>Filter value</th><th>Entry criteria</th><th>Rolls up to KPI</th><th></th></tr>
           </thead>
           <tbody id="stages-tbody"></tbody>
         </table>
@@ -134,6 +134,7 @@ function addStageRow(stage) {
   inputCell("stage-component", stage.component_key ? (labelByKey[stage.component_key] || stage.component_key) : "",
             "Type to search components…", "components-list");
   inputCell("stage-filter", stage.filter_value, "optional");
+  inputCell("stage-entry-criteria", stage.entry_criteria, "optional");
 
   const rollTd = document.createElement("td");
   const roll = document.createElement("input");
@@ -184,6 +185,7 @@ function collectSpec() {
       label: tr.querySelector(".stage-label").value,
       component_key: key,
       filter_value: tr.querySelector(".stage-filter").value,
+      entry_criteria: tr.querySelector(".stage-entry-criteria").value,
       rolls_up_to_kpi: tr.querySelector(".stage-rollup").checked,
     };
   });

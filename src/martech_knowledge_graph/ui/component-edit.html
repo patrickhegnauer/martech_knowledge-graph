@@ -56,6 +56,11 @@
       <label for="field-owner">Owner (martech:owner)</label>
       <input type="text" id="field-owner" name="owner" value="Digital Analytics">
 
+      <h3>Governance</h3>
+      <label><input type="checkbox" id="field-is-pii" name="is_pii"> Carries or is derived from PII (martech:is_pii)</label>
+      <label for="field-governance-notes">Governance notes (martech:governance_notes)</label>
+      <textarea id="field-governance-notes" name="governance_notes" rows="2" placeholder="Consent requirements, data quality/retention concerns, or other compliance-relevant context"></textarea>
+
       <h3>References to Adobe's native graph (martech:refs)</h3>
       <p class="note">Pointers only — the identity of a component stays authoritative in AEP. Never duplicate that content here.</p>
       <div class="table-scroll">
@@ -189,6 +194,8 @@ if (componentKey) {
       document.getElementById("field-caveats").value = data.caveats;
       document.getElementById("field-context").value = data.context;
       document.getElementById("field-owner").value = data.owner;
+      document.getElementById("field-governance-notes").value = data.governance_notes;
+      document.getElementById("field-is-pii").checked = !!data.is_pii;
 
       document.getElementById("refs-tbody").innerHTML = "";
       if (data.refs.length === 0) addRefRow("", "");
@@ -229,6 +236,8 @@ document.getElementById("btn-save-component").addEventListener("click", () => {
     caveats: document.getElementById("field-caveats").value,
     context: document.getElementById("field-context").value,
     owner: document.getElementById("field-owner").value,
+    governance_notes: document.getElementById("field-governance-notes").value,
+    is_pii: document.getElementById("field-is-pii").checked,
     refs: refs,
     data_layer_variables: Array.from(document.querySelectorAll('#dlv-tbody tr:not([data-readonly])')).map(tr => ({
       name: tr.querySelector('input[name="dlv_name"]').value,

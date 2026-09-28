@@ -40,6 +40,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from . import graph_explorer as ge
 from . import journey_builder as jb
+from . import skill_builder as sb
 from . import __version__, cja_client
 from .workspace import MODE_MARKER_NAME
 
@@ -358,6 +359,8 @@ def create_app(data_dir: Path) -> Flask:
         caveats = g.value(s, MARTECH.caveats)
         context = g.value(s, MARTECH.context)
         owner = g.value(s, MARTECH.owner)
+        governance_notes = g.value(s, MARTECH.governance_notes)
+        is_pii = g.value(s, MARTECH.is_pii)
         refs = [str(o) for o in g.objects(s, MARTECH.refs)]
         ctype = str(g.value(s, MARTECH.component_type) or "")
 
@@ -370,6 +373,8 @@ def create_app(data_dir: Path) -> Flask:
             "caveats": str(caveats) if caveats else "",
             "context": str(context) if context else "",
             "owner": str(owner) if owner else "",
+            "governance_notes": str(governance_notes) if governance_notes else "",
+            "is_pii": bool(is_pii.toPython()) if is_pii is not None else False,
             "refs": refs,
             "cja_description": str(g.value(s, RDFS.comment) or ""),
             "data_layer_variables": data_layer_variables_of(s),
@@ -392,7 +397,8 @@ def create_app(data_dir: Path) -> Flask:
 
         body = request.get_json(force=True)
 
-        for pred in (MARTECH.definition, MARTECH.caveats, MARTECH.context, MARTECH.owner, MARTECH.refs):
+        for pred in (MARTECH.definition, MARTECH.caveats, MARTECH.context, MARTECH.owner,
+                     MARTECH.governance_notes, MARTECH.is_pii, MARTECH.refs):
             for o in list(g.objects(s, pred)):
                 g.remove((s, pred, o))
 
@@ -400,6 +406,8 @@ def create_app(data_dir: Path) -> Flask:
         g.add((s, MARTECH.caveats, rdflib.Literal(body.get("caveats", ""))))
         g.add((s, MARTECH.context, rdflib.Literal(body.get("context", ""))))
         g.add((s, MARTECH.owner, rdflib.Literal(body.get("owner", ""))))
+        g.add((s, MARTECH.governance_notes, rdflib.Literal(body.get("governance_notes", ""))))
+        g.add((s, MARTECH.is_pii, rdflib.Literal(bool(body.get("is_pii")))))
         for ref in body.get("refs", []):
             url = (ref or {}).get("url", "").strip()
             if url:
@@ -645,7 +653,8 @@ def create_app(data_dir: Path) -> Flask:
             "kpi_target": spec.kpi_target, "kpi_comment": spec.kpi_comment or "",
             "stages": [
                 {"key": st.key, "label": st.label, "component_key": st.component_key,
-                 "filter_value": st.filter_value or "", "rolls_up_to_kpi": st.rolls_up_to_kpi}
+                 "filter_value": st.filter_value or "", "rolls_up_to_kpi": st.rolls_up_to_kpi,
+                 "entry_criteria": st.entry_criteria or ""}
                 for st in spec.stages
             ],
             "own_components": [c.key for c in spec.components],
@@ -734,6 +743,7 @@ def create_app(data_dir: Path) -> Flask:
                 key=key, label=label, order=i, component_key=comp_key,
                 filter_value=(row.get("filter_value") or "").strip() or None,
                 rolls_up_to_kpi=bool(row.get("rolls_up_to_kpi")),
+                entry_criteria=(row.get("entry_criteria") or "").strip() or None,
             ))
         if not stages and not any("Stage" in p for p in problems):
             problems.append("Add at least one stage")
@@ -754,6 +764,50 @@ def create_app(data_dir: Path) -> Flask:
         reused = sorted({st.component_key for st in stages} & set(available))
         return jsonify({"ok": True, "slug": slug, "file": out_path.name, "turtle": turtle_text,
                         "reused_components": reused})
+
+    def skills_dir():
+        return current_dir() / "skills"
+
+    @app.route("/api/skills", methods=["GET"])
+    def api_list_skills():
+        d = skills_dir()
+        files = sorted(d.glob("*.md")) if d.exists() else []
+        return jsonify({"skills": [
+            {"slug": f.stem, "file": f.name, "size": f.stat().st_size,
+             "modified": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")}
+            for f in files
+        ]})
+
+    @app.route("/api/skills/<slug>", methods=["GET"])
+    def api_get_skill(slug):
+        path = skills_dir() / f"{slug}.md"
+        if not path.exists():
+            return jsonify({"error": f"no skill '{slug}'"}), 404
+        return jsonify({"slug": slug, "file": path.name, "markdown": path.read_text(encoding="utf-8")})
+
+    @app.route("/api/skills/generate", methods=["POST"])
+    def api_generate_skill():
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+
+        body = request.get_json(force=True) or {}
+        name = (body.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "Name is required"}), 400
+        slug = jb.slugify(name, "skill")
+        path = skills_dir() / f"{slug}.md"
+        if path.exists() and not body.get("force"):
+            return jsonify({
+                "error": f"'{slug}.md' already exists — pass force to overwrite (this discards any hand edits).",
+                "slug": slug,
+            }), 409
+
+        g = ge.load_graph(ontology_path=ONTOLOGY_FILE, script_dir=current_dir())
+        markdown = sb.build_skill_draft(g, name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(markdown, encoding="utf-8")
+        return jsonify({"ok": True, "slug": slug, "file": path.name, "markdown": markdown})
 
     @app.route("/api/graph-data", methods=["GET"])
     def api_graph_data():

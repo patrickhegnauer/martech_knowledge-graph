@@ -22,7 +22,7 @@ high-level picture instead of this page-by-page detail, see the architecture dia
 | `definition` | `martech:definition` | direct match (domain: Component) |
 | `caveats` | `martech:caveats` | direct match (domain: Component) |
 | `context` | `martech:context` | direct match (domain: Component) |
-| `owner` | `martech:owner` | direct match (no fixed domain; reused across Requirement/KPI/Journey/Component/Feature) |
+| `owner` | `martech:owner` | direct match (no fixed domain; reused across Requirement/KPI/Journey/Component) |
 | `refs` (repeatable, with `refs_label`) | `martech:refs` | Component → `rdfs:Resource`; pointer to AEP's native graph, never duplicated |
 | name (read-only) | `rdfs:label` | standard RDFS, not martech-prefixed |
 | type (read-only) | `martech:component_type` | "metric" or "dimension" |
@@ -401,7 +401,7 @@ CSV import stays on `journeys.html` ("Import from CSV") and is unchanged.
   `DataLayerVariable`, so editing never drops curated content.
 - **Edit = reverse parse**: `GET /api/journeys/<slug>` runs `journey_builder.journey_from_graph()`, the inverse
   of `build_journey_turtle`. It refuses (HTTP 409 with the reason) files with node types or properties the
-  builder can't write back (`Feature`, `StageTransition`, unknown predicates, more than one journey/KPI/
+  builder can't write back (an unknown class/property, more than one journey/KPI/
   requirement, a stage with no or several measurements) rather than silently losing them.
 - `_esc()` in the builder now also escapes backslashes and newlines, so multi-line descriptions from the form's
   textareas produce valid turtle.
@@ -412,6 +412,83 @@ Verified: API (create/edit/reorder/rename, unknown component, duplicate slug, em
 reserved slug, demo mode 403, legacy journey edit keeps its component context and triple count) and in
 headless Edge (auto slug, save, validation, reload, move up, table links). Both demo journeys round-trip
 through the reverse parser with identical triple counts (82/82, 43/43).
+
+## Governance fields on Component: `is_pii` + `governance_notes`
+
+Added after reviewing a second LLM's proposal for a much larger ontology expansion (extra layers like
+Objective/Decision, Interaction, Event, Data Element, plus five metadata categories on every entity) --
+most of it would have repeated the exact Feature/StageTransition problem just cleaned up (declared,
+nothing populates it). Governance was the one piece genuinely missing and cheap to add: `is_pii`
+(xsd:boolean) and `governance_notes` (xsd:string), both `rdfs:domain martech:Component`.
+
+- `server.py`: `api_get_component`/`api_save_component_context` read/write both alongside the existing
+  `definition`/`caveats`/`context`/`owner` fields, same remove-then-add pattern. `is_pii` always written
+  as an explicit boolean literal (not just present-when-true), so "not set" and "explicitly false" aren't
+  conflated after the ontology property existed but nothing had used it yet.
+- `component-edit.html`: a "Governance" section (checkbox + textarea) between Owner and References.
+- `skill_builder.py`'s `_KEY_PROPERTIES` includes both, so a generated skill draft tells an agent a
+  component might be PII-sensitive.
+- Deliberately **not** added: a table column/badge on `components.html` (kept to what was asked), any
+  automatic PII detection (nothing infers this -- CJA sync never sets it), and none of the other four
+  metadata categories from the review (semantics/context/analytics-interpretation are already covered by
+  `definition`/`caveats`/`context`; technical-implementation duplicates `refs`/`source_system`).
+
+Verified: save/reload round-trip via the API (including explicitly toggling `is_pii` back off, which
+correctly clears rather than leaving a stale `true`); headless-Edge pass on the edit form; regenerated
+`ui/vendor/graph-data.ttl.js` and confirmed `extract_ontology_schema` lists both properties.
+
+## Ontology cleanup: removed unused scaffolding, wired up `entry_criteria`
+
+Audited `martech-ontology.ttl` against everything that actually writes instance data
+(`journey_builder.py`, `server.py`) and every instance file that exists (bundled demo + a copy of the
+user's real synced data) -- found `Feature` (+ `uses_feature`), `StageTransition` (+ `transition_from`/
+`transition_to`/`conversion_rate`), and `contributes_to` declared and documented but never instantiated
+anywhere. Removed all of it (class blocks, property blocks, and the stale `rdfs:comment` mentions on
+`Measurement`/`owner` that referenced `Feature`) rather than leaving dead schema a client would trip over;
+`StageTransition` in particular would need a real CJA Reporting API pull (actual traffic numbers, not
+metadata) to ever be populated for real -- a separate, much bigger feature, not a cleanup.
+
+Kept and wired up `entry_criteria` (free-text, "what defines that a user has entered this stage") since
+it's cheap and fills a real ambiguity, same shape as the already-wired `filter_value`: `StageSpec` gained
+the field, `build_journey_turtle`/`journey_from_graph`/the CSV path (`CSV_COLUMNS`) all carry it, and
+`journey-edit.html` has an "Entry criteria" input per stage row. The reverse-parser's
+`_ROUND_TRIP_PREDICATES` allow-list gained `entry_criteria` and never included the removed properties in
+the first place, so a legacy file still using them is correctly refused, not silently accepted.
+
+Also updated: `ui/ontology.html` (dropped the Feature/StageTransition rows and rewrote the "why Measurement
+exists" section around Measurement alone), `ui/graph.html` (dropped the dead filter checkboxes/legend
+colors), and regenerated `ui/vendor/graph-data.ttl.js` (the embedded ontology text for the standalone
+pages) so it doesn't go stale.
+
+**Verified**: `extract_ontology_schema` now returns 7 classes / 19 properties, no trace of the removed
+names; both demo journeys round-trip through `journey_from_graph` -> `build_journey_turtle` with identical
+triple counts (82/82, 43/43); a synthetic file with a `martech:Feature` triple is refused by the reverse
+parser; `entry_criteria` round-trips through the builder and reverse parser; `get_ontology_schema` over a
+real MCP client reflects the trim; the user's real (711-triple) data directory still loads cleanly.
+
+## Skill generator on `mcp.html`
+
+New module `skill_builder.py`: `build_skill_draft(g, name)` renders a full skill markdown from a loaded
+graph -- reuses `ge.extract_ontology_schema(g)` for the class list and the `rdfs:comment` text on
+`definition`/`caveats`/`context`/`owner`/`component_type`/`refs` (so a customized ontology comment is
+reflected, not hardcoded prose), and re-runs its own 4 canonical example queries against `g` at generation
+time to annotate each with its real row count. The closing "Things to get right" section is static
+template prose, explicitly marked as the part to finish by hand/LLM -- no generator can know an org's real
+gotchas.
+
+- `GET /api/skills` / `GET /api/skills/<slug>` / `POST /api/skills/generate {name, force}` in `server.py`,
+  writing to `<data_dir>/skills/<slug>.md` (new subfolder, created on first generate). `require_org_mode()`
+  guards the write, same as every other write endpoint; a name collision without `force` returns 409
+  rather than silently overwriting a hand-edited file. Slug via `jb.slugify` (already used for stage keys).
+- `mcp.html` gained its first `<script>` block: a name field + Generate button, a table of existing
+  `skills/*.md` (View fills a `<pre>` preview from the GET endpoint, Download builds a client-side
+  `Blob`/`URL` -- no separate download endpoint), and a `confirm()`-gated overwrite retry mirroring the
+  demo->org mode-switch pattern.
+
+Verified: generated draft's row-count lines match a direct `g.query()` run on a demo-data copy (5/6/6/5,
+by hand-checked expectation); demo mode blocked (403); no-`force` collision 409s, `force` overwrites;
+empty name rejected; headless-Edge pass (generate, reload persists the listing, View, overwrite-confirm,
+demo-mode messaging).
 
 ## Version + BETA badge in the header
 

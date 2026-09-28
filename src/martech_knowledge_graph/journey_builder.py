@@ -42,6 +42,7 @@ class StageSpec:
     component_key: str       # which ComponentSpec.key measures this stage
     filter_value: str = None # only needed when multiple stages share one component
     rolls_up_to_kpi: bool = False
+    entry_criteria: str = None  # optional: what defines that a user has entered this stage
 
 
 @dataclass
@@ -145,12 +146,12 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
     ]
 
     for s in spec.stages:
-        block = [f"data:stage_{s.key} a martech:Stage ;", f'    rdfs:label "{_esc(s.label)}" ;']
+        block = [f"data:stage_{s.key} a martech:Stage ;", f'    rdfs:label "{_esc(s.label)}" ;', f"    martech:order {s.order} ;"]
+        if s.entry_criteria:
+            block.append(f'    martech:entry_criteria "{_esc(s.entry_criteria)}" ;')
         if s.rolls_up_to_kpi:
-            block.append(f"    martech:order {s.order} ;")
-            block.append("    martech:rolls_up_to data:kpi .")
-        else:
-            block.append(f"    martech:order {s.order} .")
+            block.append("    martech:rolls_up_to data:kpi ;")
+        block[-1] = block[-1].rstrip(" ;") + " ."
         lines += block + [""]
 
     lines += [
@@ -217,7 +218,7 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
 _ROUND_TRIP_PREDICATES = {
     "type", "label", "comment", "status", "addressed_by", "formula", "owner", "target", "has_stage", "order",
     "rolls_up_to", "component_type", "definition", "caveats", "context", "refs", "maps_to", "source_system",
-    "measured_entity", "measured_component", "filter_value",
+    "measured_entity", "measured_component", "filter_value", "entry_criteria",
 }
 _ROUND_TRIP_TYPES = {"Requirement", "KPI", "Journey", "Stage", "Component", "DataLayerVariable", "Measurement"}
 
@@ -286,6 +287,7 @@ def journey_from_graph(g, slug):
             key=name[len("stage_"):] if name.startswith("stage_") else name,
             label=text(st, RDFS.label), order=int(one(st, M.order) or 0), component_key=comp_key,
             filter_value=text(m, M.filter_value) or None, rolls_up_to_kpi=one(st, M.rolls_up_to) is not None,
+            entry_criteria=text(st, M.entry_criteria) or None,
         ))
     stages.sort(key=lambda s: s.order)
 
@@ -356,6 +358,7 @@ def build_journey_from_csv(csv_path: str, xdm_base_url: str = DEFAULT_XDM_BASE_U
             component_key=ckey,
             filter_value=row.get("filter_value", "").strip() or None,
             rolls_up_to_kpi=yn(row.get("rolls_up_to_kpi", "")),
+            entry_criteria=row.get("entry_criteria", "").strip() or None,
         ))
 
     spec = JourneySpec(
@@ -384,7 +387,7 @@ CSV_COLUMNS = [
     "stage_key", "stage_label", "stage_order", "rolls_up_to_kpi",
     "component_key", "component_label", "component_type",
     "component_definition", "component_caveats", "component_context",
-    "component_owner", "component_xdm_path", "filter_value",
+    "component_owner", "component_xdm_path", "filter_value", "entry_criteria",
     "data_layer_variable", "data_layer_source_system",
 ]
 

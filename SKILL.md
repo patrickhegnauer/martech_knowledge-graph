@@ -6,12 +6,16 @@ description: Use when answering questions about this organization's martech metr
 # Martech Knowledge Graph
 
 A knowledge graph connecting business requirements down to raw implementation:
-**Requirement → KPI → Journey → Stage → Feature → Component → DataLayerVariable**. `Component` is a
+**Requirement → KPI → Journey → Stage → Component → DataLayerVariable**. `Component` is a
 metric or dimension from the CJA Semantic Layer — its identity is authoritative in CJA/AEP, but its
 **business meaning** (`definition`, `caveats`, `context`, `owner`) is curated here, on the graph, because
 that's a field CJA's own technical metadata has no place for. Flat RDF/Turtle files, no database, served
 by a small local Flask app plus a separate MCP server — see this repo's `README.md` for the full
 architecture if you need it; you don't need it to use this skill.
+
+This file documents the **bundled demo workspace**. Running your own org's data instead? The MCP page's
+"Generate a skill for your org" button drafts an equivalent file grounded in your real graph — live
+schema, example queries run against your actual data with real row counts — for you to finish.
 
 ## Connecting
 
@@ -38,12 +42,11 @@ it over anything you remember from a previous session — the ontology can chang
 Don't assume the class/property list below is exhaustive or current; it's orientation, not a substitute
 for calling the tool. As of when this skill was written, the core shape was:
 
-- **Classes**: `Requirement`, `KPI`, `Journey`, `Stage`, `Feature`, `Component`, `DataLayerVariable`,
-  `StageTransition`, `Measurement`.
-- **`Measurement`** and **`StageTransition`** aren't "real" business entities — they're n-ary relation
-  nodes that exist only because a plain RDF predicate can't carry its own attribute (a `Measurement`
-  carries an optional `filter_value`; a `StageTransition` carries a `conversion_rate`). To find what
-  component measures a stage, go `Stage <- measured_entity - Measurement - measured_component -> Component`.
+- **Classes**: `Requirement`, `KPI`, `Journey`, `Stage`, `Component`, `DataLayerVariable`, `Measurement`.
+- **`Measurement`** isn't a "real" business entity — it's an n-ary relation node that exists only
+  because a plain RDF predicate can't carry its own attribute (it carries an optional `filter_value`).
+  To find what component measures a stage, go
+  `Stage <- measured_entity - Measurement - measured_component -> Component`.
 - **Key `Component` properties**: `definition` (plain-language meaning), `caveats` (known data-quality
   issues — always check this before quoting a number), `context` (why it matters), `owner`,
   `component_type` (`"metric"` or `"dimension"`), `refs` (a pointer to the component's authoritative
