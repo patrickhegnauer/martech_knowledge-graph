@@ -166,6 +166,14 @@ pick based on your client:
   get a `https://<name>.fastmcp.app/mcp` URL. This project hosts nothing; each org deploys its own. The data
   is a snapshot: re-export and push to update. `--demo` exports the bundled demo data for a test deploy.
 
+  **Client compatibility on the free tier:** Horizon's free tier handles OAuth interactively — the client
+  authorizes once through a browser-based flow. Claude Desktop, claude.ai's Custom Connectors, and ChatGPT
+  all support this, so the free tier works as-is for them. **Adobe Coworker only supports connecting via a
+  static header** (e.g. a fixed `Authorization` value), not that interactive OAuth flow — and Horizon's
+  static API keys (the feature that provides a fixed header to use instead) are gated behind a paid plan,
+  not available on the free tier. So: free tier is enough for Claude/ChatGPT, but connecting Coworker
+  specifically requires upgrading past the free tier first.
+
 Two tools, per the "single doorway" principle: one query interface, not several that could give contradictory answers to the same question:
 
 - **`run_sparql(query)`** — read-only (SELECT/ASK/CONSTRUCT/DESCRIBE only). This isn't enforced by
