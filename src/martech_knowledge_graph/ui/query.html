@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Query — Martech Knowledge Graph</title>
+<title>Query · MarTech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <header class="site-header">
-  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+  <h1>MarTech Knowledge Graph: Context Layer Platform</h1>
 </header>
 <nav class="site-nav">
   <ul>
@@ -20,13 +20,14 @@
     <li class="active"><a href="query.html">Query</a></li>
     <li><a href="data-files.html">Data Files</a></li>
     <li><a href="mcp.html">MCP</a></li>
+    <li><a href="skills.html">Skills</a></li>
   </ul>
 </nav>
 <main>
   <section>
     <h2>SPARQL query</h2>
     <p class="note" id="engine-status">Loading SPARQL engine…</p>
-    <p class="note">Runs real SPARQL 1.1 (via Oxigraph, compiled to WASM, vendored locally — no CDN) against martech-ontology.ttl + *-instances.ttl, embedded on this page. Same data graph_explorer.py loads.</p>
+    <p class="note">Runs real SPARQL 1.1 (via Oxigraph, compiled to WASM, vendored locally, no CDN) against martech-ontology.ttl + *-instances.ttl, embedded on this page. Same data graph_explorer.py loads.</p>
     <div class="layout-two-col">
       <div class="col-main">
         <label for="select-sample-query">Sample query</label>
@@ -71,17 +72,15 @@ SELECT ?label ?definition ?caveats ?owner WHERE {
             <dt>KPI</dt><dd>Measurable objective addressing a requirement.</dd>
             <dt>Journey</dt><dd>Named end-to-end customer path.</dd>
             <dt>Stage</dt><dd>Ordered step within a journey.</dd>
-            <dt>Feature</dt><dd>Reusable functional capability.</dd>
             <dt>Component</dt><dd>Metric or dimension from the semantic layer.</dd>
             <dt>DataLayerVariable</dt><dd>Raw implementation artifact.</dd>
-            <dt>StageTransition</dt><dd>Empirical transition between two stages.</dd>
-            <dt>Measurement</dt><dd>"measured_by" relation between a Stage/Feature and a Component.</dd>
+            <dt>Measurement</dt><dd>"measured_by" relation between a Stage and a Component.</dd>
           </dl>
           <p><strong>Properties</strong></p>
           <dl>
-            <dt>addressed_by, has_stage, uses_feature, rolls_up_to, contributes_to, maps_to, refs</dt><dd>object properties</dd>
-            <dt>transition_from, transition_to, conversion_rate, measured_entity, measured_component, filter_value</dt><dd>n-ary relation properties</dd>
-            <dt>status, formula, target, order, entry_criteria, definition, caveats, context, component_type, source_system, owner</dt><dd>datatype (literal) properties</dd>
+            <dt>addressed_by, has_stage, rolls_up_to, maps_to, refs</dt><dd>object properties</dd>
+            <dt>measured_entity, measured_component, filter_value</dt><dd>n-ary relation properties</dd>
+            <dt>status, formula, target, order, entry_criteria, definition, caveats, context, component_type, is_pii, governance_notes, source_system, owner</dt><dd>datatype (literal) properties</dd>
           </dl>
         </div>
       </div>
@@ -223,7 +222,7 @@ document.getElementById("btn-run-query").addEventListener("click", runQuery);
     .then(bundle => {
       store.load(bundle.ontology, { format: "text/turtle" });
       Object.values(bundle.instances).forEach(text => store.load(text, { format: "text/turtle" }));
-      statusEl.textContent = "SPARQL engine ready — " + store.size + " triples loaded — live.";
+      statusEl.textContent = "SPARQL engine ready: " + store.size + " triples loaded, live.";
       document.getElementById("btn-run-query").disabled = false;
       runQuery();
     })
@@ -231,7 +230,7 @@ document.getElementById("btn-run-query").addEventListener("click", runQuery);
       store.load(ONTOLOGY_TTL, { format: "text/turtle" });
       store.load(ECOMMERCE_TTL, { format: "text/turtle" });
       store.load(LOGIN_TTL, { format: "text/turtle" });
-      statusEl.textContent = "SPARQL engine ready — " + store.size + " triples loaded — static snapshot (start `martech-knowledge-graph serve` for live data).";
+      statusEl.textContent = "SPARQL engine ready: " + store.size + " triples loaded, static snapshot (start `martech-knowledge-graph serve` for live data).";
       document.getElementById("btn-run-query").disabled = false;
       runQuery();
     });

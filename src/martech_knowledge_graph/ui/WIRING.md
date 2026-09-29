@@ -11,8 +11,6 @@ high-level picture instead of this page-by-page detail, see the architecture dia
 | Page | Element ID | Intended behavior | Reuses |
 |---|---|---|---|
 | component-edit.html | (readonly-block) | Refresh the read-only CJA block from the **real** CJA API (currently reads `server.py`'s `/api/components/<key>`, which sources from the local `.ttl` files, not a live CJA pull) | CJA Semantic Layer MCP |
-| data-files.html | (data files table) | List actual files on disk with real size/mtime | `graph_explorer.py` `load_graph()` auto-discovery of `*-instances.ttl` |
-| data-files.html | `file-viewer` | Load a real excerpt (or full file) of the selected data file, read-only | `martech-ontology.ttl` / `*-instances.ttl` on disk |
 | mcp.html | (one-click start) | A "Generate MCP" button that starts the server and shows its URL (today: CLI command, or `export-mcp` for Horizon) | `martech-knowledge-graph mcp` / `export-mcp` |
 
 ## Component form field → ontology property mapping
@@ -143,9 +141,8 @@ Adobe's docs and memory; expect to adjust on first real run.
 Added as an onboarding/reference page (nav position: right after Home) for anyone landing on the repo
 cold — the intro, core-chain walkthrough, and class/property tables are copied verbatim from
 `martech-ontology.ttl`'s own `rdfs:comment`s and `README.md`'s framing. No JS, no WIRE points: it's pure
-static content and stays that way. `query.html`'s ontology sidebar and `data-files.html`'s raw excerpt
-were deliberately left as-is rather than consolidated — they serve as quick in-the-moment reference while
-those pages, unlike this one, aren't meant to be an onboarding page.
+static content and stays that way. `query.html`'s ontology sidebar is deliberately left as-is rather than
+consolidated — it serves as quick in-the-moment reference, and that page isn't meant to be an onboarding page.
 
 ## server.py — the persistence layer (new)
 
@@ -465,6 +462,98 @@ names; both demo journeys round-trip through `journey_from_graph` -> `build_jour
 triple counts (82/82, 43/43); a synthetic file with a `martech:Feature` triple is refused by the reverse
 parser; `entry_criteria` round-trips through the builder and reverse parser; `get_ontology_schema` over a
 real MCP client reflects the trim; the user's real (711-triple) data directory still loads cleanly.
+
+## Rebrand + em-dash removal across all user-facing text
+
+User asked to rename the product from "Martech Knowledge Graph: Maintenance Platform" to "MarTech
+Knowledge Graph: Context Layer Platform", and to remove the em dash ("—") from written text in favor
+of properly restructured sentences.
+
+- **Rename**: every UI page's `<h1>` and `<title>` (title tags changed from "Page — Martech Knowledge
+  Graph" to "Page · MarTech Knowledge Graph", a middle dot instead of a dash), plus `README.md` and
+  `SKILL.md`'s own H1s. Left untouched: the `martech-knowledge-graph` CLI/package name, the `martech:` RDF
+  prefix, the `martech_knowledge_graph` module, and filenames like `martech-ontology.ttl`. These are code
+  identifiers, not the product's display name, and renaming them would be a breaking change nobody asked
+  for.
+- **Em dash removal**: applied to README.md, SKILL.md, and every `ui/*.html` page's own copy (headings,
+  notes, JS-generated status messages), rewritten as real sentences (periods, colons, semicolons, commas)
+  rather than a blind character swap. Also fixed the same pattern in `server.py` error strings and
+  `journey_builder.py`'s generated-file header comment, since those are user-visible output too. Ontology
+  `rdfs:comment` values in `martech-ontology.ttl` were fixed as well, since they're returned live by
+  `get_ontology_schema()` and shown in `ontology.html` and generated skills; `ui/vendor/graph-data.ttl.js`
+  regenerated to match.
+- **Deliberately left alone** (not "platform text" in the sense meant): `WIRING.md` itself (internal dev
+  log); Python docstrings/code comments; and the bundled demo data's own business content (the worked
+  examples in `journey_builder.py`'s `build_example_ecommerce()`/`build_example_login()`, and the matching
+  strings baked into `graph.html`'s `EMBEDDED_DATA` fallback and the CSV example in `journeys.html`) --
+  editing example *data* is a different, larger task than editing the *platform's own copy*, and doing it
+  would have left the fallback/CSV-example content inconsistent with what those functions actually
+  generate. Also left alone: the "—" used as a conventional empty-value placeholder in tables
+  (Components' XDM path/owner columns, Journeys' requirement column, Query's unbound-term cells) -- that's
+  a symbol, not a sentence.
+
+Verified: `journey_from_graph`/`build_journey_turtle` round-trip unaffected (82/82, 43/43 triples);
+`get_ontology_schema` still reports 7 classes/21 properties; every inline `<script>` on every changed page
+re-extracted and syntax-checked (`node --check`); all 11 pages return 200 and were screenshotted to
+confirm the rename and rewritten sentences render correctly.
+
+## UX pass: button spacing, stale sidebar content
+
+Prompted by "some buttons are sticking to the content above" -- screenshotted every page and traced it to
+`.table-scroll` having no `margin-bottom`: buttons carry no default browser margin, so one placed directly
+after a table (Add reference row / Add Data Layer Variable on `component-edit.html`, Add stage on
+`journey-edit.html`) sat flush against it, while everything else on the page looked fine because `<h2>`/
+`<h3>`/`<p>` all carry their own top margin already. Fixed at the root (`.table-scroll { margin-bottom:
+1rem; }`) rather than patching each button, so it can't recur when a new table+button pattern gets added
+later; verified it doesn't affect buttons living inside table cells (Edit/Delete), which don't sit
+adjacent to a `.table-scroll` boundary.
+
+Same pass found `query.html`'s "Ontology reference" sidebar (static content, deliberately not
+consolidated with `ontology.html`) still listing `Feature`/`StageTransition`/`uses_feature`/
+`contributes_to`/`transition_from`/`transition_to` -- removed from the ontology days ago but missed there.
+Updated to the current 7-class/19-property list, including `is_pii`/`governance_notes`. Grepped every
+`ui/*.html` afterward to confirm no other stale copy exists.
+
+## Skills moved to its own page (`skills.html`)
+
+The generator was buried at the bottom of `mcp.html`, past a "Not built yet" banner -- easy to miss, and
+by then a real feature in its own right (generate/view/download/delete, its own table). Moved the whole
+section (HTML + all of `mcp.html`'s only `<script>` block, verbatim) to a new `skills.html`, added to the
+nav on all 10 pages (after MCP). `mcp.html` keeps a one-line pointer instead of duplicating the
+explanation. No backend change -- same `/api/skills*` endpoints, just a different page rendering them.
+
+## Delete for journeys and skills
+
+`DELETE /api/journeys/<slug>` and `DELETE /api/skills/<slug>` -- same `require_org_mode()` guard and
+direct-path-join-then-check pattern as every other write endpoint (mirrors `/api/cja/config`'s GET/POST/
+DELETE on one route). A journey delete just removes `<slug>-instances.ttl`; if that journey defined its
+own components/data layer variable inline (a legacy, non-form-created file), those go with it -- nothing
+else in the graph references a journey's own nodes by definition, so there's no dangling-reference cleanup
+needed. `journeys.html`'s table and `mcp.html`'s skills table each get a **Delete** button next to
+Edit/View, `confirm()`-gated (same pattern as the demo->org switch and skill overwrite).
+
+Verified: demo mode blocked (403), reserved/nonexistent slugs 404, a real journey and a real skill each
+deleted and confirmed gone from disk and from their respective tables (headless-Edge pass, both pages).
+
+## data-files.html: live file listing + viewer (was fully static since the original shell)
+
+Was the last page with its two original `<!-- WIRE -->` points still open -- static demo rows
+(`ecommerce-funnel-instances.ttl`/`login-journey-instances.ttl`) regardless of mode, reported by the user
+as "still shows the ecommerce and login files" after switching to org data, which is exactly what static
+markup with no fetch would always do.
+
+- `GET /api/data-files` -- the ontology file plus every `current_dir().glob("*-instances.ttl")`, each with
+  real `size`/`modified` (`path.stat()`) and a `role` string (a small name map for the two known synced
+  files, `"Instance data — <slug>"` for anything else, e.g. a journey file).
+- `GET /api/data-files/<name>` -- raw content of one file, by exact filename (same direct-path-join +
+  `exists()` pattern as `api_get_skill`/`api_get_component`; the ontology filename is special-cased since
+  it doesn't live in `current_dir()`).
+- `data-files.html` fetches the list, renders it, and auto-loads the first file's content into the
+  viewer; each row's **View** swaps the viewer to that file.
+
+Verified against a copy of the real org data directory (components/datalayer/a journey file, no demo
+files) that the listing is exactly those files with correct sizes/timestamps, and in a headless-Edge
+screenshot against the user's actual running server.
 
 ## Skill generator on `mcp.html`
 

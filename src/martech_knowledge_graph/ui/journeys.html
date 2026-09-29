@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Journeys — Martech Knowledge Graph</title>
+<title>Journeys · MarTech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <header class="site-header">
-  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+  <h1>MarTech Knowledge Graph: Context Layer Platform</h1>
 </header>
 <nav class="site-nav">
   <ul>
@@ -20,12 +20,13 @@
     <li><a href="query.html">Query</a></li>
     <li><a href="data-files.html">Data Files</a></li>
     <li><a href="mcp.html">MCP</a></li>
+    <li><a href="skills.html">Skills</a></li>
   </ul>
 </nav>
 <main>
   <section>
     <h2>Journeys</h2>
-    <p>A journey connects a business requirement and KPI to the stages of a customer path, each measured by a component. Build one in a form, picking components you have already synced and curated — or import many at once from a CSV below.</p>
+    <p>A journey connects a business requirement and KPI to the stages of a customer path, each measured by a component. Build one in a form, picking components you have already synced and curated, or import many at once from a CSV below.</p>
     <p><a class="btn" href="journey-edit.html">New journey</a></p>
     <p class="note" id="live-mode-note">Checking for a local API…</p>
 
@@ -72,7 +73,7 @@
     <div class="panel">
       <label for="field-xdm-base-url">XDM base URL for generated refs</label>
       <input type="text" id="field-xdm-base-url" placeholder="https://sandbox/SANDBOX_NAME/xdm/">
-      <p class="note">Every component's <code>component_xdm_path</code> column (e.g. <code>commerce.checkouts.value</code>) gets appended to this prefix to build its <code>martech:refs</code> URI when you click Generate turtle. Set this to your org's real AEP sandbox once — it's just a prefix string, not validated against Adobe's actual URL scheme. Changing it only affects journeys generated <em>after</em> the change; existing files keep whatever refs they already have.</p>
+      <p class="note">Every component's <code>component_xdm_path</code> column (e.g. <code>commerce.checkouts.value</code>) gets appended to this prefix to build its <code>martech:refs</code> URI when you click Generate turtle. Set this to your org's real AEP sandbox once. It's just a prefix string, not validated against Adobe's actual URL scheme. Changing it only affects journeys generated <em>after</em> the change; existing files keep whatever refs they already have.</p>
       <p id="xdm-base-url-example" class="note"></p>
       <p>
         <button type="button" id="btn-save-settings" class="secondary">Save</button>
@@ -87,7 +88,7 @@
       <label for="input-journey-csv">Upload CSV file</label>
       <input type="file" id="input-journey-csv" name="journey_csv" accept=".csv">
 
-      <p>— or paste CSV content —</p>
+      <p>Or paste CSV content:</p>
       <textarea id="textarea-journey-csv" rows="6" placeholder="Paste CSV rows here"></textarea>
 
       <p>
@@ -115,7 +116,7 @@ martech:journey_ecommerce
     </div>
   </section>
 </main>
-<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running — see components.html for setup. Falls back to a static example otherwise.</footer>
+<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running; see components.html for setup. Falls back to a static example otherwise.</footer>
 
 <script>
 const CSV_COLUMNS = [
@@ -145,9 +146,27 @@ function renderJourneysTable(journeys) {
     a.href = "journey-edit.html?slug=" + encodeURIComponent(j.slug);
     a.textContent = "Edit";
     actionTd.appendChild(a);
+    actionTd.appendChild(document.createTextNode(" "));
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "secondary";
+    del.textContent = "Delete";
+    del.addEventListener("click", () => deleteJourney(j.slug, j.label));
+    actionTd.appendChild(del);
     tr.appendChild(actionTd);
     tbody.appendChild(tr);
   });
+}
+
+function deleteJourney(slug, label) {
+  if (!confirm('Delete "' + label + '"? This removes ' + slug + '-instances.ttl and cannot be undone.')) return;
+  fetch("/api/journeys/" + encodeURIComponent(slug), { method: "DELETE" })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (!ok) throw new Error(data.error || "delete failed");
+      loadLiveJourneys();
+    })
+    .catch(err => alert("Could not delete: " + err.message));
 }
 
 function loadLiveJourneys() {
@@ -156,10 +175,10 @@ function loadLiveJourneys() {
     .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
     .then(data => {
       renderJourneysTable(data.journeys);
-      note.textContent = "Live data — " + data.journeys.length + " journey file(s).";
+      note.textContent = "Live data: " + data.journeys.length + " journey file(s).";
     })
     .catch(() => {
-      note.textContent = "Showing static sample data — start the local API (`martech-knowledge-graph serve`) for live data.";
+      note.textContent = "Showing static sample data. Start the local API (`martech-knowledge-graph serve`) for live data.";
     });
 }
 loadLiveJourneys();
@@ -198,7 +217,7 @@ document.getElementById("btn-save-settings").addEventListener("click", () => {
       if (!ok) throw new Error(data.error || "save failed");
       document.getElementById("field-xdm-base-url").value = data.xdm_base_url;
       updateXdmExample();
-      statusEl.textContent = "Saved — applies to journeys generated from now on.";
+      statusEl.textContent = "Saved. Applies to journeys generated from now on.";
     })
     .catch(err => {
       statusEl.textContent = "Could not save (" + err.message + ").";
@@ -233,7 +252,7 @@ function validateCsv(text) {
   if (missing.length) return { ok: false, message: "Missing column(s): " + missing.join(", ") };
   if (lines.length < 2) return { ok: false, message: "No data rows found below the header." };
   const extra = header.filter(c => !CSV_COLUMNS.includes(c));
-  let message = "Looks valid — " + header.length + " column(s), " + (lines.length - 1) + " data row(s). Click Generate turtle to write it.";
+  let message = "Looks valid: " + header.length + " column(s), " + (lines.length - 1) + " data row(s). Click Generate turtle to write it.";
   if (extra.length) message += " (unrecognized column(s), ignored: " + extra.join(", ") + ")";
   return { ok: true, message };
 }

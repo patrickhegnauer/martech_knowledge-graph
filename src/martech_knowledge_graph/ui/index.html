@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Martech Knowledge Graph</title>
+<title>MarTech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <header class="site-header">
-  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+  <h1>MarTech Knowledge Graph: Context Layer Platform</h1>
 </header>
 <nav class="site-nav">
   <ul>
@@ -20,6 +20,7 @@
     <li><a href="query.html">Query</a></li>
     <li><a href="data-files.html">Data Files</a></li>
     <li><a href="mcp.html">MCP</a></li>
+    <li><a href="skills.html">Skills</a></li>
   </ul>
 </nav>
 <main>
@@ -64,8 +65,8 @@
   <section>
     <h2>Other pages</h2>
     <ul>
-      <li><a href="data-files.html">Data files</a> — the flat .ttl files that back the graph.</li>
-      <li><a href="mcp.html">MCP</a> — how to connect an LLM/agent to the graph (local, Claude Desktop, or hosted on Prefect Horizon).</li>
+      <li><a href="data-files.html">Data files</a>: the flat .ttl files that back the graph.</li>
+      <li><a href="mcp.html">MCP</a>: how to connect an LLM/agent to the graph (local, Claude Desktop, or hosted on Prefect Horizon).</li>
     </ul>
   </section>
 </main>
@@ -97,17 +98,17 @@ function refreshCounters() {
 
       if (data.mode === "demo") {
         kickstartEl.textContent =
-          "You're exploring the bundled demo data (read-only) — switch to your data (top right) when you're ready to set up your own environment.";
+          "You're exploring the bundled demo data (read-only). Switch to your data (top right) when you're ready to set up your own environment.";
       } else if (total === 0 && data.journeys.length === 0) {
         kickstartEl.textContent =
-          "This is your own workspace — currently empty. Here's what's needed to set it up:";
+          "This is your own workspace, currently empty. Here's what's needed to set it up:";
       } else {
         kickstartEl.textContent = "This is your own workspace. Current progress:";
       }
     })
     .catch(() => {
       kickstartEl.textContent =
-        "Showing static sample numbers — start the local API (`martech-knowledge-graph serve`) for live data.";
+        "Showing static sample numbers. Start the local API (`martech-knowledge-graph serve`) for live data.";
     });
 }
 refreshCounters();

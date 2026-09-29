@@ -34,9 +34,8 @@ MARTECH = Namespace("https://example.org/martech/ontology/")
 # order, status, formula are skipped — they clutter the layout without
 # adding graph structure)
 RELATIONSHIP_PREDICATES = [
-    "has_stage", "uses_feature", "rolls_up_to", "contributes_to", "maps_to",
+    "has_stage", "rolls_up_to", "maps_to",
     "addressed_by", "measured_entity", "measured_component",
-    "transition_from", "transition_to",
 ]
 
 

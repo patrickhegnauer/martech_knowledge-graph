@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Data Files — Martech Knowledge Graph</title>
+<title>Data Files · MarTech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <header class="site-header">
-  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+  <h1>MarTech Knowledge Graph: Context Layer Platform</h1>
 </header>
 <nav class="site-nav">
   <ul>
@@ -20,71 +20,81 @@
     <li><a href="query.html">Query</a></li>
     <li class="active"><a href="data-files.html">Data Files</a></li>
     <li><a href="mcp.html">MCP</a></li>
+    <li><a href="skills.html">Skills</a></li>
   </ul>
 </nav>
 <main>
   <section>
     <h2>Data files</h2>
-    <p>Flat <code>.ttl</code> files remain the storage layer — no graph database (locked decision).</p>
+    <p>Flat <code>.ttl</code> files remain the storage layer, with no graph database (a locked decision).</p>
+    <p class="note" id="live-mode-note">Checking for a local API…</p>
 
     <div class="table-scroll">
-
-
       <table id="table-data-files">
         <thead>
-          <tr><th>File</th><th>Role</th><th>Size</th><th>Last modified</th></tr>
+          <tr><th>File</th><th>Role</th><th>Size</th><th>Last modified</th><th></th></tr>
         </thead>
-        <tbody>
-          <tr data-file-name="martech-ontology.ttl">
-            <td>martech-ontology.ttl</td>
-            <td>Ontology (classes + properties, schema only)</td>
-            <td>6.4 KB</td>
-            <td>2026-08-01</td>
-          </tr>
-          <tr data-file-name="ecommerce-funnel-instances.ttl">
-            <td>ecommerce-funnel-instances.ttl</td>
-            <td>Instance data — ecommerce purchase journey</td>
-            <td>3.1 KB</td>
-            <td>2026-08-14</td>
-          </tr>
-          <tr data-file-name="login-journey-instances.ttl">
-            <td>login-journey-instances.ttl</td>
-            <td>Instance data — customer login journey</td>
-            <td>1.8 KB</td>
-            <td>2026-08-14</td>
-          </tr>
-        </tbody>
+        <tbody id="data-files-tbody"></tbody>
       </table>
-
-
     </div>
-    <!-- WIRE: list actual files on disk with real size/mtime | reuses: graph_explorer.py load_graph() auto-discovery of *-instances.ttl -->
   </section>
 
   <section>
-    <h2>File excerpt: martech-ontology.ttl</h2>
+    <h2>File excerpt: <span id="viewer-file-name">martech-ontology.ttl</span></h2>
     <div class="panel">
-      <pre class="code-block" id="file-viewer">martech:Component a rdfs:Class ;
-    rdfs:comment "A metric or dimension from the semantic layer (CJA Semantic Layer MCP). Identity is authoritative in AEP; business meaning (definition, caveats, context) is curated here." .
-
-martech:definition a rdf:Property ;
-    rdfs:domain martech:Component ;
-    rdfs:range xsd:string ;
-    rdfs:comment "Plain-language business meaning of the component." .
-
-martech:caveats a rdf:Property ;
-    rdfs:domain martech:Component ;
-    rdfs:range xsd:string ;
-    rdfs:comment "Known data-quality issues, gaps, or limitations." .
-
-martech:owner a rdf:Property ;
-    rdfs:range xsd:string ;
-    rdfs:comment "Person or team responsible. Reused across Requirement, KPI, Journey, Component, and Feature — intentionally left without a fixed domain." .</pre>
+      <pre class="code-block" id="file-viewer">Click a file above to view it.</pre>
     </div>
-    <!-- WIRE: load a real excerpt (or full file) of the selected data file, read-only | reuses: martech-ontology.ttl / *-instances.ttl on disk -->
   </section>
 </main>
-<footer class="site-footer">Static content — the only script on this page is the shared demo/org mode banner (js/mode-banner.js).</footer>
+<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running. Falls back to a static note otherwise.</footer>
+
+<script>
+function formatSize(bytes) {
+  return bytes < 1024 ? bytes + " B" : (bytes / 1024).toFixed(1) + " KB";
+}
+
+function viewFile(name) {
+  document.getElementById("viewer-file-name").textContent = name;
+  const viewer = document.getElementById("file-viewer");
+  viewer.textContent = "Loading…";
+  fetch("/api/data-files/" + encodeURIComponent(name))
+    .then(r => { if (!r.ok) throw new Error("could not load file"); return r.json(); })
+    .then(data => { viewer.textContent = data.content; })
+    .catch(err => { viewer.textContent = "Could not load " + name + ": " + err.message; });
+}
+
+function renderDataFilesTable(files) {
+  const tbody = document.getElementById("data-files-tbody");
+  tbody.innerHTML = "";
+  files.forEach(f => {
+    const tr = document.createElement("tr");
+    [f.name, f.role, formatSize(f.size), f.modified].forEach(text => {
+      const td = document.createElement("td");
+      td.textContent = text;
+      tr.appendChild(td);
+    });
+    const actionTd = document.createElement("td");
+    const a = document.createElement("a");
+    a.href = "#";
+    a.textContent = "View";
+    a.addEventListener("click", ev => { ev.preventDefault(); viewFile(f.name); });
+    actionTd.appendChild(a);
+    tr.appendChild(actionTd);
+    tbody.appendChild(tr);
+  });
+  if (files.length) viewFile(files[0].name);
+}
+
+fetch("/api/data-files")
+  .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
+  .then(data => {
+    document.getElementById("live-mode-note").textContent = "Live data: " + data.files.length + " file(s).";
+    renderDataFilesTable(data.files);
+  })
+  .catch(() => {
+    document.getElementById("live-mode-note").textContent = "Could not reach the local API. Run `martech-knowledge-graph serve` to see your real files.";
+  });
+</script>
 <script src="js/mode-banner.js"></script>
 </body>
 </html>

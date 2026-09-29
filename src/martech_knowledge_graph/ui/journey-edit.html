@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Journey — Martech Knowledge Graph</title>
+<title>Journey · MarTech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <header class="site-header">
-  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+  <h1>MarTech Knowledge Graph: Context Layer Platform</h1>
 </header>
 <nav class="site-nav">
   <ul>
@@ -20,6 +20,7 @@
     <li><a href="query.html">Query</a></li>
     <li><a href="data-files.html">Data Files</a></li>
     <li><a href="mcp.html">MCP</a></li>
+    <li><a href="skills.html">Skills</a></li>
   </ul>
 </nav>
 <main class="wide">
@@ -59,7 +60,7 @@
       <textarea id="field-kpi-comment" rows="2"></textarea>
 
       <h3>Stages</h3>
-      <p class="note">One row per step of the journey, in order. Each stage is measured by a component you already have — its definition, caveats and context come from the component itself (edit those on the Components page). Set a <strong>filter value</strong> when several stages share one component (e.g. the same page-name dimension, different page paths), and optionally <strong>entry criteria</strong> to spell out exactly what counts as reaching this stage (e.g. which page, or "at least 2 items in cart"). Data layer variables are maintained per component, not here.</p>
+      <p class="note">One row per step of the journey, in order. Each stage is measured by a component you already have. Its definition, caveats and context come from the component itself (edit those on the Components page). Set a <strong>filter value</strong> when several stages share one component (e.g. the same page-name dimension, different page paths), and optionally <strong>entry criteria</strong> to spell out exactly what counts as reaching this stage (e.g. which page, or "at least 2 items in cart"). Data layer variables are maintained per component, not here.</p>
       <div class="table-scroll">
         <table id="table-stages" class="table-fixed">
           <colgroup>
@@ -72,7 +73,7 @@
         </table>
       </div>
       <datalist id="components-list"></datalist>
-      <p class="note note-error" id="components-empty" style="display:none;">No components yet — <a href="components.html">sync them from CJA</a> first.</p>
+      <p class="note note-error" id="components-empty" style="display:none;">No components yet. <a href="components.html">Sync them from CJA</a> first.</p>
       <button type="button" id="btn-add-stage" class="secondary">Add stage</button>
 
       <p>
@@ -262,7 +263,7 @@ fetch("/api/state")
     $("live-mode-note").textContent = "Live data.";
     const list = $("components-list");
     data.components.forEach(c => {
-      let text = c.name + " — " + (c.cja_id || c.key);
+      let text = c.name + " · " + (c.cja_id || c.key);
       if (componentByLabel[text]) text += " [" + c.key + "]";
       componentByLabel[text] = c.key;
       labelByKey[c.key] = text;

@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Ontology — Martech Knowledge Graph</title>
+<title>Ontology · MarTech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <header class="site-header">
-  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+  <h1>MarTech Knowledge Graph: Context Layer Platform</h1>
 </header>
 <nav class="site-nav">
   <ul>
@@ -20,23 +20,24 @@
     <li><a href="query.html">Query</a></li>
     <li><a href="data-files.html">Data Files</a></li>
     <li><a href="mcp.html">MCP</a></li>
+    <li><a href="skills.html">Skills</a></li>
   </ul>
 </nav>
 <main>
   <section>
     <h2>Ontology</h2>
-    <p>This project models business meaning (journeys, KPIs, requirements) alongside technical metadata (XDM components, data layer variables) as one connected graph. The schema is defined in <code>martech-ontology.ttl</code> — RDFS-level only, intentionally: no OWL reasoning or constraints, just classes and properties.</p>
+    <p>This project models business meaning (journeys, KPIs, requirements) alongside technical metadata (XDM components, data layer variables) as one connected graph. The schema is defined in <code>martech-ontology.ttl</code>, RDFS-level only, intentionally: no OWL reasoning or constraints, just classes and properties.</p>
   </section>
 
   <section>
     <h3>The core chain</h3>
-    <p><strong>Requirement → KPI → Journey → Stage → Component → DataLayerVariable</strong> — from business question down to raw implementation.</p>
-    <p>A <code>Requirement</code> is the business problem or hypothesis that justifies tracking something. It's <code>addressed_by</code> a <code>KPI</code>, the measurable objective. A <code>Journey</code> <code>has_stage</code>s in order, and each <code>Stage</code> can <code>rolls_up_to</code> a KPI. A <code>Component</code> is a metric or dimension from the semantic layer (CJA Semantic Layer MCP) — its identity stays authoritative in AEP, but its business meaning (<code>definition</code>, <code>caveats</code>, <code>context</code>, <code>owner</code>) is curated here, since a platform's own technical metadata graph structurally has no field for that. A <code>DataLayerVariable</code> is the raw implementation artifact (e.g. a data layer field) that <code>maps_to</code> the component it populates.</p>
+    <p><strong>Requirement → KPI → Journey → Stage → Component → DataLayerVariable</strong>: from business question down to raw implementation.</p>
+    <p>A <code>Requirement</code> is the business problem or hypothesis that justifies tracking something. It's <code>addressed_by</code> a <code>KPI</code>, the measurable objective. A <code>Journey</code> <code>has_stage</code>s in order, and each <code>Stage</code> can <code>rolls_up_to</code> a KPI. A <code>Component</code> is a metric or dimension from the semantic layer (CJA Semantic Layer MCP). Its identity stays authoritative in AEP, but its business meaning (<code>definition</code>, <code>caveats</code>, <code>context</code>, <code>owner</code>) is curated here, since a platform's own technical metadata graph structurally has no field for that. A <code>DataLayerVariable</code> is the raw implementation artifact (e.g. a data layer field) that <code>maps_to</code> the component it populates.</p>
   </section>
 
   <section>
     <h3>Why Measurement exists</h3>
-    <p>A plain RDF predicate connects two resources with no attribute of its own. A <code>Measurement</code> (a "measured_by" link between a Stage and a Component) needs one — it can carry a <code>filter_value</code> (e.g. a specific page-name value that identifies the stage). It's modeled as its own node instead of a direct triple, following the <a href="https://www.w3.org/TR/swbp-n-aryRelations/">W3C n-ary relations pattern</a>. It isn't a "real" business entity — it exists purely to hold that extra attribute.</p>
+    <p>A plain RDF predicate connects two resources with no attribute of its own. A <code>Measurement</code> (a "measured_by" link between a Stage and a Component) needs one: it can carry a <code>filter_value</code> (e.g. a specific page-name value that identifies the stage). It's modeled as its own node instead of a direct triple, following the <a href="https://www.w3.org/TR/swbp-n-aryRelations/">W3C n-ary relations pattern</a>. It isn't a "real" business entity; it exists purely to hold that extra attribute.</p>
   </section>
 
   <section>
@@ -60,7 +61,7 @@
   </section>
 
   <section>
-    <h3>Object properties — core chain</h3>
+    <h3>Object properties: core chain</h3>
     <div class="table-scroll">
 
       <table>
@@ -70,7 +71,7 @@
           <tr><td><code>has_stage</code></td><td>Journey</td><td>Stage</td><td>Links a journey to one of its ordered stages.</td></tr>
           <tr><td><code>rolls_up_to</code></td><td>Stage</td><td>KPI</td><td>Links a stage's outcome to the KPI it contributes to.</td></tr>
           <tr><td><code>maps_to</code></td><td>DataLayerVariable</td><td>Component</td><td>Links a raw implementation variable to the semantic component it populates.</td></tr>
-          <tr><td><code>refs</code></td><td>Component</td><td>rdfs:Resource</td><td>Points to the authoritative entity in AEP's own native knowledge graph (e.g. an XDM path URI). Reference only — never duplicated locally.</td></tr>
+          <tr><td><code>refs</code></td><td>Component</td><td>rdfs:Resource</td><td>Points to the authoritative entity in AEP's own native knowledge graph (e.g. an XDM path URI). Reference only, never duplicated locally.</td></tr>
         </tbody>
       </table>
 
@@ -78,7 +79,7 @@
   </section>
 
   <section>
-    <h3>Object properties — Measurement predicates</h3>
+    <h3>Object properties: Measurement predicates</h3>
     <div class="table-scroll">
 
       <table>
@@ -105,26 +106,26 @@
           <tr><td><code>target</code></td><td>KPI</td><td>xsd:decimal</td><td>The target or benchmark value for a KPI.</td></tr>
           <tr><td><code>order</code></td><td>Stage</td><td>xsd:integer</td><td>Position of the stage within its journey.</td></tr>
           <tr><td><code>entry_criteria</code></td><td>Stage</td><td>xsd:string</td><td>What defines that a user has entered this stage.</td></tr>
-          <tr><td><code>definition</code></td><td>Component</td><td>xsd:string</td><td>Plain-language business meaning of the component. Curated here — not present in AEP's own graph.</td></tr>
+          <tr><td><code>definition</code></td><td>Component</td><td>xsd:string</td><td>Plain-language business meaning of the component. Curated here, not present in AEP's own graph.</td></tr>
           <tr><td><code>caveats</code></td><td>Component</td><td>xsd:string</td><td>Known data-quality issues, gaps, or limitations of the component.</td></tr>
           <tr><td><code>context</code></td><td>Component</td><td>xsd:string</td><td>Business or industry context explaining why the component matters.</td></tr>
           <tr><td><code>component_type</code></td><td>Component</td><td>xsd:string</td><td>Whether the component is a metric or a dimension.</td></tr>
           <tr><td><code>is_pii</code></td><td>Component</td><td>xsd:boolean</td><td>Whether the component carries or is derived from personally identifiable information.</td></tr>
           <tr><td><code>governance_notes</code></td><td>Component</td><td>xsd:string</td><td>Data governance notes: consent requirements, data quality/retention concerns, or other compliance-relevant context.</td></tr>
           <tr><td><code>source_system</code></td><td>DataLayerVariable</td><td>xsd:string</td><td>Where the raw variable is implemented, e.g. the tagging/data layer system.</td></tr>
-          <tr><td><code>owner</code></td><td><em>(none)</em></td><td>xsd:string</td><td>Person or team responsible. Reused across Requirement, KPI, Journey, and Component — intentionally left without a fixed domain.</td></tr>
+          <tr><td><code>owner</code></td><td><em>(none)</em></td><td>xsd:string</td><td>Person or team responsible. Reused across Requirement, KPI, Journey, and Component; intentionally left without a fixed domain.</td></tr>
         </tbody>
       </table>
 
     </div>
-    <p class="note"><code>owner</code> deliberately has no fixed <code>rdfs:domain</code> — it's the one property meant to be reused across several classes rather than scoped to one.</p>
+    <p class="note"><code>owner</code> deliberately has no fixed <code>rdfs:domain</code>: it's the one property meant to be reused across several classes rather than scoped to one.</p>
   </section>
 
   <section>
     <p><a href="data-files.html">See it in the raw files →</a> &nbsp;·&nbsp; <a href="query.html">Query it live →</a></p>
   </section>
 </main>
-<footer class="site-footer">Static content — the only script on this page is the shared demo/org mode banner (js/mode-banner.js).</footer>
+<footer class="site-footer">Static content: the only script on this page is the shared demo/org mode banner (js/mode-banner.js).</footer>
 <script src="js/mode-banner.js"></script>
 </body>
 </html>

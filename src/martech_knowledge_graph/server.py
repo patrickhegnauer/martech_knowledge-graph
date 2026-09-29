@@ -104,7 +104,7 @@ def create_app(data_dir: Path) -> Flask:
         """Returns a (jsonify(...), 403) tuple if in demo mode, else None."""
         if state["mode"] == "demo":
             return jsonify({
-                "error": "Demo data is read-only — switch to your own data (top right) to make edits.",
+                "error": "Demo data is read-only. Switch to your own data (top right) to make edits.",
             }), 403
         return None
 
@@ -674,6 +674,17 @@ def create_app(data_dir: Path) -> Flask:
                                      "Edit its file or regenerate it from a CSV."}), 409
         return jsonify(spec_to_json(spec))
 
+    @app.route("/api/journeys/<slug>", methods=["DELETE"])
+    def api_delete_journey(slug):
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+        path = current_dir() / f"{slug}-instances.ttl"
+        if slug in RESERVED_JOURNEY_SLUGS or not path.exists():
+            return jsonify({"error": f"no journey '{slug}'"}), 404
+        path.unlink()
+        return jsonify({"ok": True})
+
     @app.route("/api/journeys/save", methods=["POST"])
     def api_save_journey():
         blocked = require_org_mode()
@@ -785,6 +796,17 @@ def create_app(data_dir: Path) -> Flask:
             return jsonify({"error": f"no skill '{slug}'"}), 404
         return jsonify({"slug": slug, "file": path.name, "markdown": path.read_text(encoding="utf-8")})
 
+    @app.route("/api/skills/<slug>", methods=["DELETE"])
+    def api_delete_skill(slug):
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+        path = skills_dir() / f"{slug}.md"
+        if not path.exists():
+            return jsonify({"error": f"no skill '{slug}'"}), 404
+        path.unlink()
+        return jsonify({"ok": True})
+
     @app.route("/api/skills/generate", methods=["POST"])
     def api_generate_skill():
         blocked = require_org_mode()
@@ -799,7 +821,7 @@ def create_app(data_dir: Path) -> Flask:
         path = skills_dir() / f"{slug}.md"
         if path.exists() and not body.get("force"):
             return jsonify({
-                "error": f"'{slug}.md' already exists — pass force to overwrite (this discards any hand edits).",
+                "error": f"'{slug}.md' already exists. Pass force to overwrite (this discards any hand edits).",
                 "slug": slug,
             }), 409
 
@@ -808,6 +830,33 @@ def create_app(data_dir: Path) -> Flask:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(markdown, encoding="utf-8")
         return jsonify({"ok": True, "slug": slug, "file": path.name, "markdown": markdown})
+
+    DATA_FILE_ROLES = {
+        "components-instances.ttl": "Synced CJA components",
+        "datalayer-instances.ttl": "Data layer variable mappings",
+    }
+
+    def file_info(path, role):
+        stat = path.stat()
+        return {
+            "name": path.name, "role": role, "size": stat.st_size,
+            "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+        }
+
+    @app.route("/api/data-files", methods=["GET"])
+    def api_list_data_files():
+        files = [file_info(ONTOLOGY_FILE, "Ontology (classes + properties, schema only)")]
+        for path in sorted(current_dir().glob("*-instances.ttl")):
+            role = DATA_FILE_ROLES.get(path.name, "Instance data: " + path.name[:-len("-instances.ttl")])
+            files.append(file_info(path, role))
+        return jsonify({"files": files})
+
+    @app.route("/api/data-files/<name>", methods=["GET"])
+    def api_get_data_file(name):
+        path = ONTOLOGY_FILE if name == ONTOLOGY_FILE.name else current_dir() / name
+        if not name.endswith(".ttl") or not path.exists() or not path.is_file():
+            return jsonify({"error": f"no data file '{name}'"}), 404
+        return jsonify({"name": path.name, "content": path.read_text(encoding="utf-8")})
 
     @app.route("/api/graph-data", methods=["GET"])
     def api_graph_data():

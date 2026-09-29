@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Edit Component — Martech Knowledge Graph</title>
+<title>Edit Component · MarTech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <header class="site-header">
-  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+  <h1>MarTech Knowledge Graph: Context Layer Platform</h1>
 </header>
 <nav class="site-nav">
   <ul>
@@ -20,6 +20,7 @@
     <li><a href="query.html">Query</a></li>
     <li><a href="data-files.html">Data Files</a></li>
     <li><a href="mcp.html">MCP</a></li>
+    <li><a href="skills.html">Skills</a></li>
   </ul>
 </nav>
 <main>
@@ -62,7 +63,7 @@
       <textarea id="field-governance-notes" name="governance_notes" rows="2" placeholder="Consent requirements, data quality/retention concerns, or other compliance-relevant context"></textarea>
 
       <h3>References to Adobe's native graph (martech:refs)</h3>
-      <p class="note">Pointers only — the identity of a component stays authoritative in AEP. Never duplicate that content here.</p>
+      <p class="note">Pointers only. The identity of a component stays authoritative in AEP. Never duplicate that content here.</p>
       <div class="table-scroll">
 
         <table id="table-refs">
@@ -123,10 +124,10 @@ martech:component_product_views
   martech:refs &lt;https://sandbox/champion/xdm/commerce.productViews.value&gt; .
       </pre>
     </div>
-    <p class="note">This preview is regenerated from the server's response after Save — it's the actual turtle now saved for this component, not a static example, whenever the local API is reachable.</p>
+    <p class="note">This preview is regenerated from the server's response after Save. It's the actual turtle now saved for this component, not a static example, whenever the local API is reachable.</p>
   </section>
 </main>
-<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running — see components.html for setup. Falls back to a static example otherwise.</footer>
+<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running; see components.html for setup. Falls back to a static example otherwise.</footer>
 
 <script>
 const params = new URLSearchParams(location.search);
@@ -212,17 +213,17 @@ if (componentKey) {
     })
     .catch(() => {
       document.getElementById("live-mode-note").textContent =
-        "Could not load component '" + componentKey + "' from the local API — showing the static example instead.";
+        "Could not load component '" + componentKey + "' from the local API. Showing the static example instead.";
     });
 } else {
   document.getElementById("live-mode-note").textContent =
-    "No component selected (open this page via a table's Edit link) — showing the static example.";
+    "No component selected (open this page via a table's Edit link). Showing the static example.";
 }
 
 document.getElementById("btn-save-component").addEventListener("click", () => {
   const statusEl = document.getElementById("save-status");
   if (!componentKey) {
-    statusEl.textContent = "No component selected — open this page via components.html's Edit link.";
+    statusEl.textContent = "No component selected. Open this page via components.html's Edit link.";
     statusEl.style.display = "inline";
     return;
   }

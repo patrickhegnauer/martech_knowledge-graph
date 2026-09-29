@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>MCP — Martech Knowledge Graph</title>
+<title>MCP · MarTech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <header class="site-header">
-  <h1>Martech Knowledge Graph — Maintenance Platform</h1>
+  <h1>MarTech Knowledge Graph: Context Layer Platform</h1>
 </header>
 <nav class="site-nav">
   <ul>
@@ -20,18 +20,19 @@
     <li><a href="query.html">Query</a></li>
     <li><a href="data-files.html">Data Files</a></li>
     <li class="active"><a href="mcp.html">MCP</a></li>
+    <li><a href="skills.html">Skills</a></li>
   </ul>
 </nav>
 <main>
   <section>
-    <div class="status-banner">Built — run it from a terminal. There's no one-click "start" button on this page yet (that's a deliberate next step, not a gap); until then, the CLI is the real, working way to run it.</div>
+    <div class="status-banner">Built. Run it from a terminal. There's no one-click "start" button on this page yet (that's a deliberate next step, not a gap); until then, the CLI is the real, working way to run it.</div>
 
     <h3>Run it</h3>
     <pre class="code-block">martech-knowledge-graph mcp</pre>
-    <p class="note">Reads the same <code>--data-dir</code> and demo/org mode <code>martech-knowledge-graph serve</code> uses (shares its <code>.mkg-mode</code> file) — switching workspaces in the browser is reflected on the MCP server's very next tool call, no restart needed. By default it prints and serves at <code>http://127.0.0.1:8931/mcp</code> — point any MCP-compatible client (Claude, an agent framework, etc.) at that URL.</p>
+    <p class="note">Reads the same <code>--data-dir</code> and demo/org mode <code>martech-knowledge-graph serve</code> uses (shares its <code>.mkg-mode</code> file). Switching workspaces in the browser is reflected on the MCP server's very next tool call, with no restart needed. By default it prints and serves at <code>http://127.0.0.1:8931/mcp</code>: point any MCP-compatible client (Claude, an agent framework, etc.) at that URL.</p>
 
-    <h3>Two transports — pick based on your client</h3>
-    <p class="note"><code>--transport http</code> (the default, shown above) runs a persistent server at a URL — use this for anything that connects over the network: claude.ai's Custom Connectors, a coworker on another machine, an agent framework. <code>--transport stdio</code> is for a client that spawns the process itself from a local config file, with no URL involved — this is how <strong>Claude Desktop's</strong> "Local MCP Servers" config works.</p>
+    <h3>Two transports: pick based on your client</h3>
+    <p class="note"><code>--transport http</code> (the default, shown above) runs a persistent server at a URL. Use this for anything that connects over the network: claude.ai's Custom Connectors, a coworker on another machine, an agent framework. <code>--transport stdio</code> is for a client that spawns the process itself from a local config file, with no URL involved. This is how <strong>Claude Desktop's</strong> "Local MCP Servers" config works.</p>
 
     <p class="note">For Claude Desktop, add this to <code>claude_desktop_config.json</code> (Settings → Developer → Edit Config), using the full path to the installed console script so it resolves regardless of Claude Desktop's own PATH:</p>
     <pre class="code-block">{
@@ -42,7 +43,7 @@
     }
   }
 }</pre>
-    <p class="note">Find your own <code>martech-knowledge-graph.exe</code> path by running <code>where martech-knowledge-graph</code> (Windows) or <code>which martech-knowledge-graph</code> (macOS/Linux) in the same terminal you installed it from. Restart Claude Desktop after editing the config. No URL, no <code>--host</code>/<code>--port</code> — Claude Desktop spawns and owns the process directly.</p>
+    <p class="note">Find your own <code>martech-knowledge-graph.exe</code> path by running <code>where martech-knowledge-graph</code> (Windows) or <code>which martech-knowledge-graph</code> (macOS/Linux) in the same terminal you installed it from. Restart Claude Desktop after editing the config. No URL, no <code>--host</code>/<code>--port</code>: Claude Desktop spawns and owns the process directly.</p>
 
     <h3>Publish to Prefect Horizon (hosted URL)</h3>
     <pre class="code-block">martech-knowledge-graph export-mcp --out ./my-mcp</pre>
@@ -59,11 +60,11 @@
         <tbody>
           <tr data-tool-name="run_sparql">
             <td><code>run_sparql</code></td>
-            <td>Runs a <strong>read-only</strong> SPARQL query (SELECT / ASK / CONSTRUCT / DESCRIBE) against the currently active workspace's graph. Write forms (INSERT/DELETE) aren't filtered out — they simply fail to parse against rdflib's read-only query grammar, so there's no separate check that could have a gap in it.</td>
+            <td>Runs a <strong>read-only</strong> SPARQL query (SELECT / ASK / CONSTRUCT / DESCRIBE) against the currently active workspace's graph. Write forms (INSERT/DELETE) aren't filtered out; they simply fail to parse against rdflib's read-only query grammar, so there's no separate check that could have a gap in it.</td>
           </tr>
           <tr data-tool-name="get_ontology_schema">
             <td><code>get_ontology_schema</code></td>
-            <td>Returns every class and property in the ontology — name, comment, and (for properties) domain/range — extracted live from <code>martech-ontology.ttl</code>, so it can't drift out of sync with the real schema. Meant to be called before <code>run_sparql</code> by a caller that doesn't already know the graph's shape.</td>
+            <td>Returns every class and property in the ontology: name, comment, and, for properties, domain/range, extracted live from <code>martech-ontology.ttl</code>, so it can't drift out of sync with the real schema. Meant to be called before <code>run_sparql</code> by a caller that doesn't already know the graph's shape.</td>
           </tr>
         </tbody>
       </table>
@@ -72,152 +73,18 @@
 
     <h2>Security posture</h2>
     <div class="panel">
-      <p>The local server has no authentication — it binds to <code>127.0.0.1</code> only by default, matching every other part of this tool's local-first trust model (same as <code>martech-knowledge-graph serve</code>). Reachable only from the machine it runs on unless you deliberately pass <code>--host</code> to change that. A server deployed on Prefect Horizon is public-facing but protected by Horizon's OAuth (it cannot be switched off on the free tier), and its data is a snapshot in your own private repository.</p>
+      <p>The local server has no authentication. It binds to <code>127.0.0.1</code> only by default, matching every other part of this tool's local-first trust model (same as <code>martech-knowledge-graph serve</code>). Reachable only from the machine it runs on unless you deliberately pass <code>--host</code> to change that. A server deployed on Prefect Horizon is public-facing but protected by Horizon's OAuth (it cannot be switched off on the free tier), and its data is a snapshot in your own private repository.</p>
       <p><span class="badge badge-has-context">Read-only</span> <span class="badge badge-has-context">Localhost by default</span></p>
     </div>
 
     <h2>Not built yet</h2>
     <p class="note">A "Generate MCP" button on this page that starts the server as a background process and shows you the URL here, instead of running the CLI command yourself. The CLI command above is the real, fully-working path in the meantime.</p>
-  </section>
 
-  <section>
-    <h2>Generate a skill for your org</h2>
-    <p>A skill file tells an AI agent how to use this MCP connection well — what the graph means, example queries, what to watch out for. The <code>SKILL.md</code> in this repo documents the bundled demo workspace; the button below drafts one grounded in <strong>your own</strong> data instead: it pulls the live ontology schema and runs the example queries against your graph right now, so the draft shows real row counts, not guesses. It's a starting point — finish the wording (and the "Things to get right" section) by hand or hand it to your own LLM; there's no AI built into this app to do that part for you.</p>
-    <p class="note" id="skill-live-note">Checking for a local API…</p>
-
-    <div class="toolbar">
-      <input type="text" id="field-skill-name" placeholder="Skill name, e.g. martech-knowledge-graph">
-      <button type="button" id="btn-generate-skill">Generate</button>
-      <span id="skill-status" class="note" style="display:none;"></span>
-    </div>
-
-    <div class="table-scroll">
-      <table id="table-skills">
-        <thead>
-          <tr><th>Skill</th><th>Size</th><th>Generated</th><th></th></tr>
-        </thead>
-        <tbody id="skills-tbody">
-          <tr><td colspan="4" class="note">None yet — generate one above.</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="panel" id="skill-preview-panel" hidden>
-      <p class="note" id="skill-preview-label"></p>
-      <pre class="code-block" id="skill-preview"></pre>
-    </div>
+    <h2>Skill files</h2>
+    <p>Once an agent can connect (above), give it a skill file so it knows how to use this graph well. <a href="skills.html">Generate one grounded in your own data →</a></p>
   </section>
 </main>
-<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) for the skill generator; everything else here is static.</footer>
-
-<script>
-function api(path, options) {
-  return fetch(path, options).then(r =>
-    r.json().catch(() => ({})).then(data => {
-      if (!r.ok) { const err = new Error(data.error || ("request failed (" + r.status + ")")); err.data = data; throw err; }
-      return data;
-    })
-  );
-}
-
-function showSkill(slug, markdown) {
-  document.getElementById("skill-preview-panel").hidden = false;
-  document.getElementById("skill-preview-label").textContent = slug + ".md";
-  document.getElementById("skill-preview").textContent = markdown;
-}
-
-function downloadSkill(slug, markdown) {
-  const blob = new Blob([markdown], { type: "text/markdown" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = slug + ".md";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function renderSkillsTable(skills) {
-  const tbody = document.getElementById("skills-tbody");
-  tbody.innerHTML = "";
-  if (skills.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" class="note">None yet — generate one above.</td></tr>';
-    return;
-  }
-  skills.forEach(sk => {
-    const tr = document.createElement("tr");
-    [sk.slug, Math.round(sk.size / 100) / 10 + " KB", sk.modified].forEach(text => {
-      const td = document.createElement("td");
-      td.textContent = text;
-      tr.appendChild(td);
-    });
-    const actionTd = document.createElement("td");
-    const view = document.createElement("button");
-    view.type = "button";
-    view.className = "secondary";
-    view.textContent = "View";
-    view.addEventListener("click", () => {
-      api("/api/skills/" + encodeURIComponent(sk.slug)).then(data => showSkill(data.slug, data.markdown));
-    });
-    const dl = document.createElement("button");
-    dl.type = "button";
-    dl.className = "secondary";
-    dl.textContent = "Download";
-    dl.addEventListener("click", () => {
-      api("/api/skills/" + encodeURIComponent(sk.slug)).then(data => downloadSkill(data.slug, data.markdown));
-    });
-    actionTd.appendChild(view);
-    actionTd.appendChild(dl);
-    tr.appendChild(actionTd);
-    tbody.appendChild(tr);
-  });
-}
-
-function loadSkills() {
-  return api("/api/skills").then(data => renderSkillsTable(data.skills)).catch(() => {});
-}
-
-function generateSkill(force) {
-  const nameField = document.getElementById("field-skill-name");
-  const statusEl = document.getElementById("skill-status");
-  const name = nameField.value.trim() || "martech-knowledge-graph";
-  statusEl.textContent = "Generating…";
-  statusEl.style.display = "inline";
-  api("/api/skills/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: name, force: !!force }),
-  })
-    .then(data => {
-      statusEl.textContent = "Generated " + data.file + ".";
-      showSkill(data.slug, data.markdown);
-      loadSkills();
-    })
-    .catch(err => {
-      if (err.data && err.data.slug && !force) {
-        const ok = confirm("'" + err.data.slug + ".md' already exists. Overwrite it? This discards any hand edits you made.");
-        if (ok) { generateSkill(true); return; }
-        statusEl.textContent = "Not overwritten.";
-        return;
-      }
-      statusEl.textContent = "Could not generate: " + err.message;
-    });
-}
-
-document.getElementById("btn-generate-skill").addEventListener("click", () => generateSkill(false));
-
-fetch("/api/state")
-  .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
-  .then(data => {
-    document.getElementById("skill-live-note").textContent = data.mode === "demo"
-      ? "You're in demo mode — switch to your data (top right) before generating a skill; demo data is read-only."
-      : "Live data.";
-    loadSkills();
-  })
-  .catch(() => {
-    document.getElementById("skill-live-note").textContent = "Could not reach the local API — run `martech-knowledge-graph serve` to generate skills.";
-    document.getElementById("btn-generate-skill").disabled = true;
-  });
-</script>
+<footer class="site-footer">Static content: the only script on this page is the shared demo/org mode banner (js/mode-banner.js).</footer>
 <script src="js/mode-banner.js"></script>
 </body>
 </html>

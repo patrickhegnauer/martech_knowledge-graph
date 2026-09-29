@@ -3,19 +3,19 @@ name: martech-knowledge-graph
 description: Use when answering questions about this organization's martech metrics/dimensions (CJA components), their business definitions/caveats/owners, customer journeys, KPIs, or business requirements. Trigger on questions like "what does this metric mean", "what's the caveat on this dimension", "which journeys use this component", "what KPI does this tie back to", or anything asking for curated business context that CJA's own technical metadata doesn't hold. Requires an MCP connection to a running `martech-knowledge-graph mcp` server.
 ---
 
-# Martech Knowledge Graph
+# MarTech Knowledge Graph: Context Layer Platform
 
 A knowledge graph connecting business requirements down to raw implementation:
 **Requirement → KPI → Journey → Stage → Component → DataLayerVariable**. `Component` is a
-metric or dimension from the CJA Semantic Layer — its identity is authoritative in CJA/AEP, but its
+metric or dimension from the CJA Semantic Layer. Its identity is authoritative in CJA/AEP, but its
 **business meaning** (`definition`, `caveats`, `context`, `owner`) is curated here, on the graph, because
-that's a field CJA's own technical metadata has no place for. Flat RDF/Turtle files, no database, served
-by a small local Flask app plus a separate MCP server — see this repo's `README.md` for the full
-architecture if you need it; you don't need it to use this skill.
+that's a field CJA's own technical metadata has no place for. It's served by a small local Flask app plus
+a separate MCP server, with flat RDF/Turtle files and no database. See this repo's `README.md` for the
+full architecture if you need it; you don't need it to use this skill.
 
-This file documents the **bundled demo workspace**. Running your own org's data instead? The MCP page's
-"Generate a skill for your org" button drafts an equivalent file grounded in your real graph — live
-schema, example queries run against your actual data with real row counts — for you to finish.
+This file documents the **bundled demo workspace**. If you're running your own org's data instead, use
+the Skills page's "Generate" button: it drafts an equivalent file grounded in your real graph, using the
+live schema and example queries run against your actual data with real row counts, for you to finish.
 
 ## Connecting
 
@@ -23,47 +23,49 @@ The graph is exposed over MCP (Streamable HTTP) by:
 ```
 martech-knowledge-graph mcp
 ```
-which prints the URL it's listening on — `http://127.0.0.1:8931/mcp` by default. Add that as an MCP
+which prints the URL it's listening on: `http://127.0.0.1:8931/mcp` by default. Add that as an MCP
 server connection. (Other ways to reach the same graph: `martech-knowledge-graph mcp --transport stdio`,
 spawned from Claude Desktop's local server config, or a hosted snapshot on Prefect Horizon via
-`martech-knowledge-graph export-mcp` — a `https://<name>.fastmcp.app/mcp` URL that uses OAuth.) There's no authentication (localhost-only by default) — if you can't reach it, it
-probably isn't running; ask the person you're helping to start it (`martech-knowledge-graph mcp` in a
-terminal, from wherever this repo/package is installed) rather than guessing at data.
+`martech-knowledge-graph export-mcp`, which gives a `https://<name>.fastmcp.app/mcp` URL that uses OAuth.)
+There's no authentication by default (localhost-only). If you can't reach it, it probably isn't running,
+so ask the person you're helping to start it (`martech-knowledge-graph mcp` in a terminal, from wherever
+this repo/package is installed) rather than guessing at data.
 
 Two tools are exposed, nothing else (deliberately -- one query doorway, not many competing ones):
 
 ## `get_ontology_schema()`
 
-Returns every class and property in the ontology — name, comment, and (for properties) domain/range.
+Returns every class and property in the ontology: name, comment, and, for properties, domain/range.
 **Call this first** if you don't already know the graph's shape, or if a `run_sparql` query comes back
 empty/wrong and you're not sure why. The answer is generated live from the actual ontology file, so trust
-it over anything you remember from a previous session — the ontology can change between conversations.
+it over anything you remember from a previous session, since the ontology can change between
+conversations.
 
 Don't assume the class/property list below is exhaustive or current; it's orientation, not a substitute
 for calling the tool. As of when this skill was written, the core shape was:
 
 - **Classes**: `Requirement`, `KPI`, `Journey`, `Stage`, `Component`, `DataLayerVariable`, `Measurement`.
-- **`Measurement`** isn't a "real" business entity — it's an n-ary relation node that exists only
+- **`Measurement`** isn't a "real" business entity; it's an n-ary relation node that exists only
   because a plain RDF predicate can't carry its own attribute (it carries an optional `filter_value`).
   To find what component measures a stage, go
   `Stage <- measured_entity - Measurement - measured_component -> Component`.
 - **Key `Component` properties**: `definition` (plain-language meaning), `caveats` (known data-quality
-  issues — always check this before quoting a number), `context` (why it matters), `owner`,
+  issues; always check this before quoting a number), `context` (why it matters), `owner`,
   `component_type` (`"metric"` or `"dimension"`), `refs` (a pointer to the component's authoritative
-  entity in CJA/AEP's own graph — a reference only, don't treat it as content).
-- Namespace: `https://example.org/martech/ontology/` (prefix `martech:` in examples below) — this is a
+  entity in CJA/AEP's own graph, treated as a reference only, not as content).
+- Namespace: `https://example.org/martech/ontology/` (prefix `martech:` in examples below). This is a
   placeholder base URI in the public template; a real org deployment may have swapped in their own.
   `get_ontology_schema()` tells you the truth regardless.
 
 ## `run_sparql(query)`
 
 Runs a **read-only** SPARQL query (`SELECT`, `ASK`, `CONSTRUCT`, or `DESCRIBE`) against the graph.
-`INSERT`/`DELETE` aren't supported — don't attempt them, they will fail. This tool only ever reads; it
+`INSERT`/`DELETE` aren't supported and will fail if attempted. This tool only ever reads; it
 is not how business context gets added or corrected (that happens through the web UI, by a human who owns
-that judgment call — see `README.md`'s "Adding a new journey" / component-editing flow if someone asks
+that judgment call. See `README.md`'s "Adding a new journey" / component-editing flow if someone asks
 how to change something here).
 
-**Response shape**: `{"results": [...]}` for `SELECT`/`CONSTRUCT`/`DESCRIBE` (a list of dicts — variable
+**Response shape**: `{"results": [...]}` for `SELECT`/`CONSTRUCT`/`DESCRIBE` (a list of dicts: variable
 bindings for `SELECT`, `{subject, predicate, object}` triples for `CONSTRUCT`/`DESCRIBE`),
 `{"result": true|false}` for `ASK`, or `{"error": "..."}` if the query didn't parse or run. Always check
 for the `error` key before assuming you got data.
@@ -76,7 +78,7 @@ PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
 ### Example: business context for every component
 
-The question you'll get asked most often — "what does this metric/dimension actually mean, and what
+The question you'll get asked most often is "what does this metric/dimension actually mean, and what
 should I watch out for":
 ```sparql
 SELECT ?label ?definition ?caveats ?owner WHERE {
@@ -104,7 +106,7 @@ SELECT ?order ?stageLabel ?componentLabel ?ref WHERE {
 ### Example: every journey's stages, in order, with a filter value where one applies
 
 Useful when a component is shared across stages (e.g. one `page_name` dimension identifying several
-different steps by its value) — the `filter_value` is what actually distinguishes them:
+different steps by its value); the `filter_value` is what actually distinguishes them:
 ```sparql
 SELECT ?journeyLabel ?order ?stageLabel ?compLabel ?filterValue WHERE {
   ?journey a martech:Journey ; rdfs:label ?journeyLabel ; martech:has_stage ?stage .
@@ -131,16 +133,16 @@ No row for a component means its implementation source hasn't been documented ye
 ## Things to get right
 
 - **Always surface `caveats`, not just `definition`**, when explaining a metric to someone who might act
-  on it — that field exists specifically because the raw number is easy to misread (e.g. "counts page
+  on it. That field exists specifically because the raw number is easy to misread (e.g. "counts page
   views, not unique visitors" on a component literally named `product_views`).
 - **`refs` is a pointer, not a duplicate.** If asked what a component *is* technically (its real CJA/XDM
-  identity), say the `refs` value points to that in CJA/AEP's own graph — don't invent or assume details
+  identity), say the `refs` value points to that in CJA/AEP's own graph. Don't invent or assume details
   about it beyond what's there.
 - **This may be demo data.** A fresh install of this tool defaults to a bundled demo workspace with two
-  illustrative example journeys (an ecommerce funnel, a login flow) — not necessarily this org's real
+  illustrative example journeys (an ecommerce funnel, a login flow), not necessarily this org's real
   data. If answers look generic/example-shaped (owners like "Digital Analytics", obviously placeholder
   URLs), say so rather than presenting them as the org's real configuration, and suggest checking whether
   the server is in demo or org mode.
 - **No result isn't always "doesn't exist."** A `SELECT` with zero rows can mean the component genuinely
-  isn't curated yet (real gap — a component pulled from CJA but nobody's written its business context)
+  isn't curated yet (a real gap: a component pulled from CJA but nobody's written its business context)
   rather than a query mistake. Consider both before concluding either way.
