@@ -31,8 +31,8 @@
       <li><span class="step-marker" id="step-marker-components"></span> <a href="components.html">1. Pull components from CJA</a></li>
       <li><span class="step-marker" id="step-marker-context"></span> <a href="components.html">2. Add context to a component</a></li>
       <li><span class="step-marker" id="step-marker-journeys"></span> <a href="journeys.html">3. Author journeys (CSV)</a></li>
-      <li><span class="step-marker"></span> <a href="graph.html">4. View the graph</a></li>
-      <li><span class="step-marker"></span> <a href="query.html">5. Query the graph</a></li>
+      <li><span class="step-marker" id="step-marker-graph"></span> <a href="graph.html">4. View the graph</a></li>
+      <li><span class="step-marker" id="step-marker-query"></span> <a href="query.html">5. Query the graph</a></li>
     </ol>
   </section>
 
@@ -77,6 +77,13 @@ function setStepDone(id, done) {
   document.getElementById(id).classList.toggle("done", done);
 }
 
+// Viewing/querying the graph doesn't change any data, so there's nothing server-side to check;
+// remembered per-browser instead (see graph.html / query.html, which set this on load).
+function visited(page) {
+  try { return localStorage.getItem("mkg-visited-" + page) === "1"; }
+  catch (e) { return false; }
+}
+
 function refreshCounters() {
   const kickstartEl = document.getElementById("kickstart-note");
   return fetch("/api/state")
@@ -95,6 +102,8 @@ function refreshCounters() {
       setStepDone("step-marker-components", total > 0);
       setStepDone("step-marker-context", withContext > 0);
       setStepDone("step-marker-journeys", data.journeys.length > 0);
+      setStepDone("step-marker-graph", visited("graph"));
+      setStepDone("step-marker-query", visited("query"));
 
       if (data.mode === "demo") {
         kickstartEl.textContent =

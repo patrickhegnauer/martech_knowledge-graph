@@ -70,6 +70,8 @@
 <footer class="site-footer">Graph page renders live via vendored vis-network (JS). Every page also includes the shared demo/org mode banner (js/mode-banner.js); otherwise the rest stay static and JS-free.</footer>
 
 <script>
+try { localStorage.setItem("mkg-visited-graph", "1"); } catch (e) { /* private browsing or blocked storage: harmless, just skips the Home checklist tick */ }
+
 // Fallback snapshot, extracted by graph_explorer.py's extract_full_graph()
 // against martech-ontology.ttl + ecommerce-funnel-instances.ttl +
 // login-journey-instances.ttl. Used only if the local API isn't reachable;

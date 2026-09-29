@@ -93,6 +93,8 @@ SELECT ?label ?definition ?caveats ?owner WHERE {
 <script src="vendor/oxigraph.web.js"></script>
 <script src="vendor/graph-data.ttl.js"></script>
 <script>
+try { localStorage.setItem("mkg-visited-query", "1"); } catch (e) { /* private browsing or blocked storage: harmless, just skips the Home checklist tick */ }
+
 const SAMPLE_QUERIES = {
   "component-context": document.getElementById("textarea-sparql").value,
   "funnel-walk":

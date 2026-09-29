@@ -463,6 +463,19 @@ triple counts (82/82, 43/43); a synthetic file with a `martech:Feature` triple i
 parser; `entry_criteria` round-trips through the builder and reverse parser; `get_ontology_schema` over a
 real MCP client reflects the trim; the user's real (711-triple) data directory still loads cleanly.
 
+## Home checklist steps 4/5 ("View the graph" / "Query the graph") never ticked
+
+Their `<span class="step-marker">` had no `id` at all, so `setStepDone()` was never called for them; steps
+1-3 tick from real data state (components synced, context added, journeys created), but viewing/querying
+the graph changes no data, so there's nothing server-side to check. Tracked per-browser instead:
+`graph.html`/`query.html` set `localStorage["mkg-visited-<page>"] = "1"` on load (wrapped in try/catch,
+same as every other localStorage use in this app, since it can throw in private browsing); `index.html`
+reads it back via a small `visited(page)` helper. A per-viewer convenience, not shared state: it won't show
+as done for someone else looking at the same org data from a different browser.
+
+Verified in headless Edge: both steps start unticked, visiting both pages and returning to Home ticks
+both.
+
 ## Rebrand + em-dash removal across all user-facing text
 
 User asked to rename the product from "Martech Knowledge Graph: Maintenance Platform" to "MarTech
