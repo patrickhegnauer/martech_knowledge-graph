@@ -70,6 +70,17 @@ def component_key_from_subject(subject):
     return local[len("component_"):] if local.startswith("component_") else local
 
 
+# Standard CJA components. Their id is the same in every data view, so one node (and one curated context)
+# serves all of them: a later data view adds its own ref to the existing node instead of creating a copy.
+# Everything else is custom and gets its own node per data view.
+SHARED_CJA_ID_PREFIXES = ("variables/daterange", "variables/timepart", "metrics/adobe_")
+SHARED_CJA_IDS = {"metrics/visits", "metrics/visitors", "metrics/occurrences"}
+
+
+def is_shared_cja_component(cja_id):
+    return cja_id in SHARED_CJA_IDS or cja_id.startswith(SHARED_CJA_ID_PREFIXES)
+
+
 SETTINGS_MARKER_NAME = ".mkg-settings.json"
 CJA_CONFIG_NAME = ".mkg-cja.json"
 CJA_URN_PREFIX = "urn:cja:"
@@ -550,6 +561,8 @@ def create_app(data_dir: Path) -> Flask:
 
         xdm_base_url = load_settings()["xdm_base_url"]
         subject_by_ref = {str(o): s for s in g.subjects(RDF.type, MARTECH.Component) for o in g.objects(s, MARTECH.refs)}
+        subject_by_key = {component_key_from_subject(s): s for s in g.subjects(RDF.type, MARTECH.Component)}
+        dv_slug = re.sub(r"[^a-z0-9]+", "_", dv_id.lower()).strip("_")
 
         added = {"metric": 0, "dimension": 0}
         skipped = 0
@@ -577,9 +590,27 @@ def create_app(data_dir: Path) -> Flask:
                 enriched += changed
                 skipped += 1
                 continue
-            if ref in known_refs or key in known_types:
+            if ref in known_refs:
                 skipped += 1
                 continue
+            if key in known_types:
+                if is_shared_cja_component(comp["id"]):
+                    # The standard component already has a node: this data view's refs join it, context unchanged.
+                    subject = subject_by_key.get(key)
+                    if subject is None:
+                        skipped += 1
+                        continue
+                    g.add((subject, MARTECH.refs, rdflib.URIRef(ref)))
+                    if xdm_ref is not None:
+                        g.add((subject, MARTECH.refs, xdm_ref))
+                    known_refs.add(ref)
+                    enriched += 1
+                    continue
+                # A custom component with the same key from another data view gets its own node.
+                key = f"{dv_slug}_{key}"
+                if key in known_types:
+                    skipped += 1
+                    continue
             known_types[key] = comp["type"]
             known_refs.add(ref)
             subject = cja_ns["component_" + key]

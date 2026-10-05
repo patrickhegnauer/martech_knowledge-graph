@@ -253,6 +253,13 @@ Then pick a data view and sync. All of its metrics and dimensions are added as c
   where CJA reports one; derived fields have none),
 - CJA's description (shown read-only on the edit page).
 
+Context follows the data view as follows. Standard dimensions and metrics (the date and time-parting
+dimensions such as Day, Month and Week, the Adobe session metrics, and Visits, Visitors and Occurrences) have
+the same id in every data view, so they keep one entry and their context is curated once; each data view adds
+its reference to that entry. Custom components are kept per data view: when two data views have a component
+with the same name, the second one is stored under its data view's id (for example `dv_2_orders`) with its own
+context.
+
 Re-syncing is safe: existing components are never overwritten (your curated context stays) and are only
 enriched with a missing XDM reference or description. Set your XDM base URL on the Journeys page before
 syncing so the references point at your sandbox rather than the `SANDBOX_NAME` placeholder; syncing again
