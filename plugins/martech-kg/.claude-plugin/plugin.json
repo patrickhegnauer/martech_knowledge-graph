@@ -1,0 +1,6 @@
+{
+  "name": "martech-kg",
+  "description": "Martech knowledge graph as a skill: journeys, KPIs, requirements, components, data layer variables, caveats and owners.",
+  "author": { "name": "Hegi" },
+  "keywords": ["knowledge-graph", "martech", "rdf", "analytics"]
+}

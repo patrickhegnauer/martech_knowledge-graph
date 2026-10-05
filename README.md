@@ -203,6 +203,24 @@ section is for your organization's real gotchas, filled in by hand or with your 
 built-in AI to write that part). Saved per-org to `<data_dir>/skills/<name>.md`, never to this repo. The
 root `SKILL.md` stays the bundled demo workspace's own example. Delete a skill from the same page's table.
 
+## Use in Coworker (plugin marketplace)
+
+The repository is also a plugin marketplace. The `martech-kg` plugin ships the graph as a skill, with the
+ontology and the bundled example data in its `references/` folder, so Coworker can answer from the graph
+without an MCP connection.
+
+- Run `python build_plugin.py` after any change to the ontology or the instance files. It regenerates
+  `plugins/martech-kg/skills/martech-kg/references/`, including a `context-snapshot.md` with one section per
+  journey.
+- Commit and push to the repository's default branch.
+- In Coworker, open Configurations, then Marketplaces, add this repository, and install the `martech-kg`
+  plugin. After later pushes, update the marketplace.
+- The plugin folder is generated. Never edit it by hand.
+
+By default the build uses the bundled, generic example data, so no organization data is committed.
+Passing `--data-dir` builds from another folder; that output contains that data, so keep it out of public
+repositories.
+
 ## Web UI
 
 The web UI covers the whole loop: pull components, curate their business context, author journeys,

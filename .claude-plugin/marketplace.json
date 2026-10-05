@@ -1,0 +1,11 @@
+{
+  "name": "martech-knowledge-graph",
+  "owner": { "name": "Hegi" },
+  "plugins": [
+    {
+      "name": "martech-kg",
+      "source": "./plugins/martech-kg",
+      "description": "Martech knowledge graph: customer journeys, KPIs, requirements, and the components, data layer variables, caveats and owners behind them."
+    }
+  ]
+}
