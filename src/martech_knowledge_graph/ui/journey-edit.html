@@ -42,12 +42,24 @@
       <input type="text" id="field-owner" autocomplete="off">
 
       <h3>Requirement</h3>
+      <div>
+        <label for="select-req">Requirement</label>
+        <select id="select-req"></select>
+        <p class="note" id="note-req"></p>
+        <p><button type="button" class="secondary" id="btn-unlock-req" hidden>Edit shared entry</button></p>
+      </div>
       <label for="field-req-label">Business requirement</label>
       <input type="text" id="field-req-label" autocomplete="off" placeholder="e.g. Understand shop performance and drop-off">
       <label for="field-req-comment">Description</label>
       <textarea id="field-req-comment" rows="2"></textarea>
 
       <h3>KPI</h3>
+      <div>
+        <label for="select-kpi">KPI</label>
+        <select id="select-kpi"></select>
+        <p class="note" id="note-kpi"></p>
+        <p><button type="button" class="secondary" id="btn-unlock-kpi" hidden>Edit shared entry</button></p>
+      </div>
       <label for="field-kpi-label">KPI name</label>
       <input type="text" id="field-kpi-label" autocomplete="off" placeholder="e.g. Order conversion rate">
       <label for="field-kpi-formula">Formula</label>
@@ -88,7 +100,7 @@
     <div class="panel"><pre class="code-block" id="turtle-preview"></pre></div>
   </section>
 </main>
-<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`). Saving writes the journey's file in your data directory; components are referenced, never copied.</footer>
+<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`). Saving writes the journey's file in your data directory. Components, requirements and KPIs are referenced, never copied; requirements and KPIs you create here are added to the shared library.</footer>
 
 <script>
 const slugParam = new URLSearchParams(location.search).get("slug");
@@ -101,6 +113,122 @@ let savedAsExisting = false;   // once a new journey is saved, later saves edit 
 
 function slugify(text) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+// Shared library pickers. A requirement or KPI is a library entry (source "library"), a new entry created
+// with this journey (source "new"), or, for journeys saved before the library existed, this journey's own
+// copy (source "local"). Library fields stay read-only until "Edit shared entry" is pressed, because a change
+// there changes every journey that uses the entry.
+const PICKER = {
+  requirement: { list: "requirements", select: "select-req", note: "note-req", unlock: "btn-unlock-req",
+                 fields: ["field-req-label", "field-req-comment"] },
+  kpi: { list: "kpis", select: "select-kpi", note: "note-kpi", unlock: "btn-unlock-kpi",
+         fields: ["field-kpi-label", "field-kpi-formula", "field-kpi-owner", "field-kpi-target", "field-kpi-comment"] },
+};
+const picker = {
+  requirement: { value: "new", legacy: false, source: "new", id: "", update: false },
+  kpi: { value: "new", legacy: false, source: "new", id: "", update: false },
+};
+let libraryData = { requirements: [], kpis: [] };
+let libraryLoaded = false;
+
+function addOption(sel, value, text) {
+  const o = document.createElement("option");
+  o.value = value;
+  o.textContent = text;
+  sel.appendChild(o);
+}
+
+function findEntry(kind, id) {
+  return libraryData[PICKER[kind].list].find(e => e.id === id) || null;
+}
+
+function writeFields(kind, e) {
+  if (kind === "requirement") {
+    $("field-req-label").value = e.label;
+    $("field-req-comment").value = e.comment || "";
+  } else {
+    $("field-kpi-label").value = e.label;
+    $("field-kpi-formula").value = e.formula;
+    $("field-kpi-owner").value = e.owner;
+    $("field-kpi-target").value = e.target === null || e.target === undefined ? "" : e.target;
+    $("field-kpi-comment").value = e.comment || "";
+  }
+}
+
+function lockFields(kind, locked) {
+  PICKER[kind].fields.forEach(id => { $(id).readOnly = locked; });
+  $(PICKER[kind].unlock).hidden = !locked;
+}
+
+function renderPickerNote(kind) {
+  const p = picker[kind];
+  const el = $(PICKER[kind].note);
+  el.classList.remove("note-error");
+  if (p.source === "library") {
+    const entry = findEntry(kind, p.id);
+    const uses = entry ? entry.usage : 0;
+    const usage = uses + (uses === 1 ? " journey" : " journeys");
+    if (p.update) {
+      el.textContent = "Editing the shared entry. Saving changes it for every journey that uses it (" + usage + ").";
+      el.classList.add("note-error");
+    } else {
+      el.textContent = "Shared entry, used by " + usage + ". Changing it changes every one of them, so the fields stay read-only until you press Edit shared entry.";
+    }
+  } else if (p.source === "local") {
+    el.textContent = "Only in this journey. Pick a shared entry to link this journey to the library instead.";
+  } else {
+    el.textContent = "A new entry. It is added to the shared library, so other journeys can pick it.";
+  }
+}
+
+function onPickerChange(kind) {
+  const p = picker[kind];
+  const value = $(PICKER[kind].select).value;
+  const entry = value.startsWith("lib:") ? findEntry(kind, value.slice(4)) : null;
+  p.value = value;
+  p.update = false;
+  if (entry) {
+    p.source = "library";
+    p.id = entry.id;
+    writeFields(kind, entry);
+    lockFields(kind, true);
+  } else {
+    p.source = value === "local" ? "local" : "new";
+    p.id = "";
+    lockFields(kind, false);
+  }
+  renderPickerNote(kind);
+}
+
+function rebuildPicker(kind) {
+  const cfg = PICKER[kind], p = picker[kind];
+  const sel = $(cfg.select);
+  sel.innerHTML = "";
+  addOption(sel, "new", "Create new");
+  libraryData[cfg.list].forEach(e => addOption(sel, "lib:" + e.id, e.label + " (used by " + e.usage + ")"));
+  if (p.legacy) addOption(sel, "local", "This journey only (not in the library)");
+  sel.value = Array.from(sel.options).some(o => o.value === p.value) ? p.value : "new";
+  // Until the library has loaded, a stored "lib:" choice cannot be shown yet, so keep it for later.
+  if (libraryLoaded) onPickerChange(kind);
+}
+
+function setPicker(kind, value, legacy) {
+  picker[kind].value = value;
+  picker[kind].legacy = legacy;
+  rebuildPicker(kind);
+}
+
+function loadLibrary() {
+  return fetch("/api/library")
+    .then(r => { if (!r.ok) throw new Error("library unavailable"); return r.json(); })
+    .then(data => { libraryData = data; })
+    .catch(() => { libraryData = { requirements: [], kpis: [] }; })
+    .then(() => {
+      libraryLoaded = true;
+      rebuildPicker("requirement");
+      rebuildPicker("kpi");
+    });
 }
 
 function showStatus(text, isError) {
@@ -204,6 +332,12 @@ function collectSpec() {
       kpi_target: $("field-kpi-target").value,
       kpi_comment: $("field-kpi-comment").value,
       stages: stages,
+      requirement_source: picker.requirement.source,
+      requirement_id: picker.requirement.id,
+      update_requirement: picker.requirement.update,
+      kpi_source: picker.kpi.source,
+      kpi_id: picker.kpi.id,
+      update_kpi: picker.kpi.update,
     },
     badRows: bad,
   };
@@ -222,6 +356,8 @@ function fillForm(spec) {
   $("field-kpi-comment").value = spec.kpi_comment;
   $("stages-tbody").innerHTML = "";
   spec.stages.forEach(addStageRow);
+  setPicker("requirement", spec.requirement_id ? "lib:" + spec.requirement_id : "local", !spec.requirement_id);
+  setPicker("kpi", spec.kpi_id ? "lib:" + spec.kpi_id : "local", !spec.kpi_id);
 }
 
 $("field-label").addEventListener("input", () => {
@@ -229,6 +365,10 @@ $("field-label").addEventListener("input", () => {
 });
 $("field-slug").addEventListener("input", () => { slugTouched = true; });
 $("btn-add-stage").addEventListener("click", () => addStageRow());
+$("select-req").addEventListener("change", () => { picker.requirement.value = $("select-req").value; onPickerChange("requirement"); });
+$("select-kpi").addEventListener("change", () => { picker.kpi.value = $("select-kpi").value; onPickerChange("kpi"); });
+$("btn-unlock-req").addEventListener("click", () => { picker.requirement.update = true; lockFields("requirement", false); renderPickerNote("requirement"); });
+$("btn-unlock-kpi").addEventListener("click", () => { picker.kpi.update = true; lockFields("kpi", false); renderPickerNote("kpi"); });
 $("form-journey").addEventListener("submit", ev => ev.preventDefault());
 
 $("btn-save-journey").addEventListener("click", () => {
@@ -253,10 +393,16 @@ $("btn-save-journey").addEventListener("click", () => {
       if (!editing) history.replaceState(null, "", "journey-edit.html?slug=" + encodeURIComponent(data.slug));
       $("field-slug").readOnly = true;
       savedAsExisting = true;
+      // Reload the library first so the entry this save created or changed is in the list before it is selected.
+      loadLibrary().then(() => {
+        setPicker("requirement", data.requirement_id ? "lib:" + data.requirement_id : "local", !data.requirement_id);
+        setPicker("kpi", data.kpi_id ? "lib:" + data.kpi_id : "local", !data.kpi_id);
+      });
     })
     .catch(err => showStatus("Save failed: " + err.message, true));
 });
 
+loadLibrary();
 fetch("/api/state")
   .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
   .then(data => {

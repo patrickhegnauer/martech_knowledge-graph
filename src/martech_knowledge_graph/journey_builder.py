@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 
 
 ONTOLOGY_NS = "https://example.org/martech/ontology/"
+# Shared requirements and KPIs (library-instances.ttl, org data directory only). See library.py.
+LIBRARY_NS = "https://example.org/martech/data/library/"
 
 # Prefix for generated Component refs (Component.xdm_path gets appended to this).
 # Org-specific -- overridable per call; server.py's /api/journeys/generate reads
@@ -61,6 +63,8 @@ class JourneySpec:
     stages: list = field(default_factory=list)        # list[StageSpec]
     data_layer_variable: str = None
     data_layer_source_system: str = "Web data layer (digitalData)"
+    requirement_uri: str = None  # set when the requirement is a shared library entry
+    kpi_uri: str = None          # set when the KPI is a shared library entry
 
 
 def _esc(s):
@@ -82,6 +86,9 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
     def comp_ref(key):
         return f"<{existing_components[key]}>" if key in existing_components else f"data:component_{key}"
 
+    req_ref = f"<{spec.requirement_uri}>" if spec.requirement_uri else "data:req"
+    kpi_ref = f"<{spec.kpi_uri}>" if spec.kpi_uri else "data:kpi"
+
     data_ns = f"https://example.org/martech/data/{spec.slug}/"
     lines = [
         f"# ==========================================================================",
@@ -97,30 +104,43 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
         "# Requirement",
         "# --------------------------------------------------------------------------",
         "",
-        "data:req a martech:Requirement ;",
-        f'    rdfs:label "{_esc(spec.requirement_label)}" ;',
-        f'    rdfs:comment "{_esc(spec.requirement_comment)}" ;',
-        '    martech:status "active" ;',
-        "    martech:addressed_by data:kpi .",
-        "",
+    ]
+    if spec.requirement_uri:
+        lines += ["# Shared: defined in library-instances.ttl. This file only links it to the KPI.",
+                  "", f"{req_ref} martech:addressed_by {kpi_ref} .", ""]
+    else:
+        lines += [
+            "data:req a martech:Requirement ;",
+            f'    rdfs:label "{_esc(spec.requirement_label)}" ;',
+            f'    rdfs:comment "{_esc(spec.requirement_comment)}" ;',
+            '    martech:status "active" ;',
+            f"    martech:addressed_by {kpi_ref} .",
+            "",
+        ]
+
+    lines += [
         "# --------------------------------------------------------------------------",
         "# KPI",
         "# --------------------------------------------------------------------------",
         "",
-        "data:kpi a martech:KPI ;",
-        f'    rdfs:label "{_esc(spec.kpi_label)}" ;',
-        f'    martech:formula "{_esc(spec.kpi_formula)}" ;',
-        f'    martech:owner "{_esc(spec.kpi_owner)}" ;',
     ]
-    kpi_tail = "."
-    if spec.kpi_target is not None:
-        lines.append(f"    martech:target {spec.kpi_target} ;")
-    if spec.kpi_comment:
-        lines.append(f'    rdfs:comment "{_esc(spec.kpi_comment)}" {kpi_tail}')
+    if spec.kpi_uri:
+        lines += ["# Shared: defined in library-instances.ttl.", ""]
     else:
-        # close the last line with a period instead of semicolon
-        lines[-1] = lines[-1].rstrip(" ;") + " ."
-    lines.append("")
+        kpi_lines = [
+            "data:kpi a martech:KPI ;",
+            f'    rdfs:label "{_esc(spec.kpi_label)}" ;',
+            f'    martech:formula "{_esc(spec.kpi_formula)}" ;',
+            f'    martech:owner "{_esc(spec.kpi_owner)}" ;',
+        ]
+        if spec.kpi_target is not None:
+            kpi_lines.append(f"    martech:target {spec.kpi_target} ;")
+        if spec.kpi_comment:
+            kpi_lines.append(f'    rdfs:comment "{_esc(spec.kpi_comment)}" .')
+        else:
+            # close the last line with a period instead of semicolon
+            kpi_lines[-1] = kpi_lines[-1].rstrip(" ;") + " ."
+        lines += kpi_lines + [""]
 
     journey_lines = [
         "data:journey a martech:Journey ;",
@@ -150,7 +170,7 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
         if s.entry_criteria:
             block.append(f'    martech:entry_criteria "{_esc(s.entry_criteria)}" ;')
         if s.rolls_up_to_kpi:
-            block.append("    martech:rolls_up_to data:kpi ;")
+            block.append(f"    martech:rolls_up_to {kpi_ref} ;")
         block[-1] = block[-1].rstrip(" ;") + " ."
         lines += block + [""]
 
@@ -227,17 +247,25 @@ def _local(uri):
     return str(uri).rstrip("/").split("/")[-1].split("#")[-1]
 
 
-def journey_from_graph(g, slug):
-    """Returns (JourneySpec, None) or (None, reason). g must hold just this journey's file."""
+def journey_core(g, journey):
+    """(kpi, requirement) for the journey in g: the KPI its stages roll up to, and the requirement that KPI
+    is addressed by. Either is None when the file does not have exactly one of it."""
+    from rdflib import Namespace
+    M = Namespace(ONTOLOGY_NS)
+    kpis = {k for st in g.objects(journey, M.has_stage) for k in g.objects(st, M.rolls_up_to)}
+    if len(kpis) != 1:
+        return None, None
+    kpi = next(iter(kpis))
+    reqs = list(g.subjects(M.addressed_by, kpi))
+    return kpi, (reqs[0] if len(reqs) == 1 else None)
+
+
+def journey_from_graph(g, slug, library=None):
+    """Returns (JourneySpec, None) or (None, reason). g must hold just this journey's file. library is the
+    graph of shared requirements and KPIs (library-instances.ttl): it is read for their labels and values,
+    and a journey that points at a library entry keeps that link."""
     from rdflib import RDF, RDFS, Namespace
     M = Namespace(ONTOLOGY_NS)
-
-    def one(node, pred):
-        return g.value(node, pred)
-
-    def text(node, pred, default=""):
-        v = one(node, pred)
-        return str(v) if v is not None else default
 
     for s, p, o in g:
         if p == RDF.type:
@@ -252,11 +280,23 @@ def journey_from_graph(g, slug):
             return None, f"uses a property the form cannot preserve ({_local(p)})"
 
     journeys = list(g.subjects(RDF.type, M.Journey))
-    kpis = list(g.subjects(RDF.type, M.KPI))
-    reqs = list(g.subjects(RDF.type, M.Requirement))
-    if len(journeys) != 1 or len(kpis) != 1 or len(reqs) != 1:
-        return None, "must contain exactly one journey, one requirement and one KPI"
-    journey, kpi, req = journeys[0], kpis[0], reqs[0]
+    if len(journeys) != 1:
+        return None, "must contain exactly one journey"
+    journey = journeys[0]
+    kpi, req = journey_core(g, journey)
+    if kpi is None:
+        return None, "must have stages that all roll up to exactly one KPI"
+    if req is None:
+        return None, "must have exactly one requirement addressed by that KPI"
+
+    src = g if library is None else g + library
+
+    def one(node, pred):
+        return src.value(node, pred)
+
+    def text(node, pred, default=""):
+        v = one(node, pred)
+        return str(v) if v is not None else default
 
     own_components = {}
     for c in g.subjects(RDF.type, M.Component):
@@ -304,6 +344,8 @@ def journey_from_graph(g, slug):
         components=list(own_components.values()), stages=stages,
         data_layer_variable=text(dlvs[0], RDFS.label) if dlvs else None,
         data_layer_source_system=(text(dlvs[0], M.source_system) if dlvs else "") or "Web data layer (digitalData)",
+        requirement_uri=str(req) if str(req).startswith(LIBRARY_NS) else None,
+        kpi_uri=str(kpi) if str(kpi).startswith(LIBRARY_NS) else None,
     )
     return spec, None
 

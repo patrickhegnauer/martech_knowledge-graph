@@ -40,6 +40,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from . import graph_explorer as ge
 from . import journey_builder as jb
+from . import library as lib
 from . import skill_builder as sb
 from . import __version__, cja_client
 from .workspace import MODE_MARKER_NAME
@@ -74,6 +75,9 @@ CJA_CONFIG_NAME = ".mkg-cja.json"
 CJA_URN_PREFIX = "urn:cja:"
 DLV_FILE_NAME = "datalayer-instances.ttl"
 DLV_NS = Namespace("https://example.org/martech/data/datalayer/")
+RESERVED_JOURNEY_SLUGS = {"components", "datalayer", "library"}
+# Form kind -> key in library.read_entries()
+LIBRARY_KINDS = {"requirement": "requirements", "kpi": "kpis"}
 
 
 def create_app(data_dir: Path) -> Flask:
@@ -288,9 +292,10 @@ def create_app(data_dir: Path) -> Flask:
             for s in g.subjects(RDF.type, MARTECH.Journey):
                 label = str(g.value(s, RDFS.label) or ge._local_name(s))
                 stages = len(list(g.objects(s, MARTECH.has_stage)))
-                kpis = len(list(g.subjects(RDF.type, MARTECH.KPI)))
-                requirements = list(g.subjects(RDF.type, MARTECH.Requirement))
-                requirement = str(g.value(requirements[0], RDFS.label)) if requirements else ""
+                kpi, req = jb.journey_core(g, s)
+                kpis = 1 if kpi is not None else 0
+                req_label = merged.value(req, RDFS.label) if req is not None else None
+                requirement = str(req_label) if req_label is not None else ""
                 mtime = datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d")
                 journeys.append({
                     "slug": path.name.replace("-instances.ttl", ""),
@@ -643,8 +648,6 @@ def create_app(data_dir: Path) -> Flask:
         return jsonify({"ok": True, "slug": slug, "file": out_path.name, "turtle": turtle_text,
                         "reused_components": reused})
 
-    RESERVED_JOURNEY_SLUGS = {"components", "datalayer"}
-
     def spec_to_json(spec):
         return {
             "slug": spec.slug, "journey_label": spec.journey_label, "journey_owner": spec.journey_owner or "",
@@ -659,7 +662,96 @@ def create_app(data_dir: Path) -> Flask:
             ],
             "own_components": [c.key for c in spec.components],
             "data_layer_variable": spec.data_layer_variable or "",
+            "requirement_id": lib.id_from_uri(spec.requirement_uri or ""),
+            "kpi_id": lib.id_from_uri(spec.kpi_uri or ""),
         }
+
+    def library_file():
+        return current_dir() / lib.LIBRARY_FILE_NAME
+
+    def load_library_graph():
+        g = rdflib.Graph()
+        if library_file().exists():
+            g.parse(library_file(), format="turtle")
+        return g
+
+    def library_usage():
+        """{library URI: number of journey files that refer to it}."""
+        counts = {}
+        for path, fg in load_instance_file_graphs().items():
+            if path.name == lib.LIBRARY_FILE_NAME or next(fg.subjects(RDF.type, MARTECH.Journey), None) is None:
+                continue
+            for node in set(fg.subjects()) | set(fg.objects()):
+                uri = str(node)
+                if uri.startswith(jb.LIBRARY_NS):
+                    counts[uri] = counts.get(uri, 0) + 1
+        return counts
+
+    @app.route("/api/library", methods=["GET"])
+    def api_get_library():
+        entries = lib.read_entries(library_file())
+        usage = library_usage()
+        for kind in LIBRARY_KINDS.values():
+            for entry in entries[kind]:
+                entry["usage"] = usage.get(lib.uri_for(entry["id"]), 0)
+        return jsonify(entries)
+
+    def library_fields(kind, body):
+        """(fields, problems) for a requirement or KPI library entry, from the form body."""
+        problems = []
+        label = (body.get("label") or "").strip()
+        if not label:
+            problems.append("Name is required")
+        if kind == "requirement":
+            return {"label": label, "comment": (body.get("comment") or "").strip()}, problems
+        formula, owner = (body.get("formula") or "").strip(), (body.get("owner") or "").strip()
+        if not formula:
+            problems.append("KPI formula is required")
+        if not owner:
+            problems.append("KPI owner is required")
+        target = body.get("target")
+        try:
+            target = float(target) if target not in (None, "") else None
+        except (TypeError, ValueError):
+            target = None
+            problems.append("KPI target must be a number")
+        return {"label": label, "formula": formula, "owner": owner, "target": target,
+                "comment": (body.get("comment") or "").strip()}, problems
+
+    @app.route("/api/library/<kind>", methods=["POST"])
+    def api_create_library_entry(kind):
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+        if kind not in LIBRARY_KINDS:
+            return jsonify({"error": f"no library kind '{kind}'"}), 404
+        fields, problems = library_fields(kind, request.get_json(force=True) or {})
+        if problems:
+            return jsonify({"error": "; ".join(problems)}), 400
+        entries = lib.read_entries(library_file())
+        pool = entries[LIBRARY_KINDS[kind]]
+        entry_id = lib.new_id("req" if kind == "requirement" else "kpi", fields["label"], {e["id"] for e in pool})
+        pool.append({"id": entry_id, **fields})
+        lib.write_entries(library_file(), entries)
+        return jsonify({"ok": True, "id": entry_id})
+
+    @app.route("/api/library/<kind>/<entry_id>", methods=["POST"])
+    def api_update_library_entry(kind, entry_id):
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+        if kind not in LIBRARY_KINDS:
+            return jsonify({"error": f"no library kind '{kind}'"}), 404
+        fields, problems = library_fields(kind, request.get_json(force=True) or {})
+        if problems:
+            return jsonify({"error": "; ".join(problems)}), 400
+        entries = lib.read_entries(library_file())
+        entry = next((e for e in entries[LIBRARY_KINDS[kind]] if e["id"] == entry_id), None)
+        if entry is None:
+            return jsonify({"error": f"no {kind} '{entry_id}' in the library"}), 404
+        entry.update(fields)
+        lib.write_entries(library_file(), entries)
+        return jsonify({"ok": True, "id": entry_id})
 
     @app.route("/api/journeys/<slug>", methods=["GET"])
     def api_get_journey(slug):
@@ -668,7 +760,7 @@ def create_app(data_dir: Path) -> Flask:
             return jsonify({"error": f"no journey '{slug}'"}), 404
         g = rdflib.Graph()
         g.parse(path, format="turtle")
-        spec, reason = jb.journey_from_graph(g, slug)
+        spec, reason = jb.journey_from_graph(g, slug, library=load_library_graph())
         if spec is None:
             return jsonify({"error": f"This journey can't be edited in the form: it {reason}. "
                                      "Edit its file or regenerate it from a CSV."}), 409
@@ -719,12 +811,13 @@ def create_app(data_dir: Path) -> Flask:
 
         out_path = current_dir() / f"{slug}-instances.ttl"
         own_components, dlv, dlv_source = [], None, "Web data layer (digitalData)"
+        original = None
         if editing:
             if not out_path.exists():
                 return jsonify({"error": f"no journey '{slug}' to edit"}), 404
             og = rdflib.Graph()
             og.parse(out_path, format="turtle")
-            original, reason = jb.journey_from_graph(og, slug)
+            original, reason = jb.journey_from_graph(og, slug, library=load_library_graph())
             if original is None:
                 return jsonify({"error": f"This journey can't be edited in the form: it {reason}."}), 409
             own_components = original.components
@@ -758,6 +851,48 @@ def create_app(data_dir: Path) -> Flask:
             ))
         if not stages and not any("Stage" in p for p in problems):
             problems.append("Add at least one stage")
+
+        # Requirement and KPI: each comes from the shared library (source "library"), is created there
+        # (source "new"), or stays inside this journey file (source "local", legacy journeys being edited).
+        # The library is only written after every check has passed.
+        library = lib.read_entries(library_file())
+        library_changed = False
+        shared_fields = {
+            "requirement": {"label": requirement_label, "comment": (body.get("requirement_comment") or "").strip()},
+            "kpi": {"label": kpi_label, "formula": kpi_formula, "owner": kpi_owner, "target": kpi_target,
+                    "comment": (body.get("kpi_comment") or "").strip()},
+        }
+        original_uris = {"requirement": original.requirement_uri if original else None,
+                         "kpi": original.kpi_uri if original else None}
+        shared_uris = {}
+        for kind, key in (("requirement", "requirements"), ("kpi", "kpis")):
+            pool = library[key]
+            source = (body.get(f"{kind}_source") or "library").strip()
+            entry_id = (body.get(f"{kind}_id") or "").strip()
+            display = "requirement" if kind == "requirement" else "KPI"
+            shared_uris[kind] = None
+            if source == "local":
+                if not editing or original_uris[kind] is not None:
+                    problems.append(f"Pick a {display} from the library")
+            elif source == "library":
+                entry = next((e for e in pool if e["id"] == entry_id), None)
+                if entry is None:
+                    problems.append(f"Pick a {display} from the library")
+                    continue
+                if body.get(f"update_{kind}"):
+                    entry.update(shared_fields[kind])
+                    library_changed = True
+                shared_uris[kind] = lib.uri_for(entry["id"])
+            elif source == "new":
+                prefix = "req" if kind == "requirement" else "kpi"
+                new_entry = {"id": lib.new_id(prefix, shared_fields[kind]["label"], {e["id"] for e in pool}),
+                             **shared_fields[kind]}
+                pool.append(new_entry)
+                library_changed = True
+                shared_uris[kind] = lib.uri_for(new_entry["id"])
+            else:
+                problems.append(f"Choose a {display} from the library or create a new one")
+
         if problems:
             return jsonify({"error": "; ".join(problems)}), 400
 
@@ -767,14 +902,19 @@ def create_app(data_dir: Path) -> Flask:
             kpi_label=kpi_label, kpi_formula=kpi_formula, kpi_owner=kpi_owner, kpi_target=kpi_target,
             kpi_comment=(body.get("kpi_comment") or "").strip() or None,
             components=own_components, stages=stages, data_layer_variable=dlv, data_layer_source_system=dlv_source,
+            requirement_uri=shared_uris["requirement"], kpi_uri=shared_uris["kpi"],
         )
         turtle_text = jb.build_journey_turtle(
             spec, xdm_base_url=load_settings()["xdm_base_url"], existing_components=available,
         )
+        if library_changed:
+            lib.write_entries(library_file(), library)
         out_path.write_text(turtle_text, encoding="utf-8")
         reused = sorted({st.component_key for st in stages} & set(available))
         return jsonify({"ok": True, "slug": slug, "file": out_path.name, "turtle": turtle_text,
-                        "reused_components": reused})
+                        "reused_components": reused, "library_changed": library_changed,
+                        "requirement_id": lib.id_from_uri(shared_uris["requirement"] or ""),
+                        "kpi_id": lib.id_from_uri(shared_uris["kpi"] or "")})
 
     def skills_dir():
         return current_dir() / "skills"
@@ -834,6 +974,7 @@ def create_app(data_dir: Path) -> Flask:
     DATA_FILE_ROLES = {
         "components-instances.ttl": "Synced CJA components",
         "datalayer-instances.ttl": "Data layer variable mappings",
+        lib.LIBRARY_FILE_NAME: "Shared requirements and KPIs (library)",
     }
 
     def file_info(path, role):

@@ -69,6 +69,52 @@
   </section>
 
   <section>
+    <h2>Shared library</h2>
+    <p>Requirements and KPIs that several journeys use. Each is stored once, so changing it here changes every journey that uses it. Deleting a journey never deletes its library entries; an entry no journey uses stays here with a count of 0. The library belongs to your own data; the demo data is read-only and has none.</p>
+    <p class="note" id="library-note">Loading the library…</p>
+
+    <h3>Requirements</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Requirement</th><th>Description</th><th>Used by</th><th></th></tr></thead>
+        <tbody id="library-requirements-tbody"></tbody>
+      </table>
+    </div>
+    <p><button type="button" class="secondary" id="btn-new-requirement">New requirement</button></p>
+
+    <h3>KPIs</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>KPI</th><th>Formula</th><th>Owner</th><th>Target</th><th>Used by</th><th></th></tr></thead>
+        <tbody id="library-kpis-tbody"></tbody>
+      </table>
+    </div>
+    <p><button type="button" class="secondary" id="btn-new-kpi">New KPI</button></p>
+
+    <div class="panel" id="library-editor" hidden>
+      <h3 id="library-editor-title"></h3>
+      <label for="lib-label">Name</label>
+      <input type="text" id="lib-label" autocomplete="off">
+      <div id="lib-kpi-fields" hidden>
+        <label for="lib-formula">Formula</label>
+        <input type="text" id="lib-formula" autocomplete="off">
+        <label for="lib-owner">KPI owner</label>
+        <input type="text" id="lib-owner" autocomplete="off">
+        <label for="lib-target">Target (number, optional)</label>
+        <input type="text" id="lib-target" autocomplete="off">
+      </div>
+      <label for="lib-comment" id="lib-comment-label">Description</label>
+      <textarea id="lib-comment" rows="2"></textarea>
+      <p class="note" id="library-editor-warning"></p>
+      <p>
+        <button type="button" id="btn-library-save">Save</button>
+        <button type="button" class="secondary" id="btn-library-cancel">Cancel</button>
+        <span id="library-status" class="note" style="display:none;"></span>
+      </p>
+    </div>
+  </section>
+
+  <section>
     <h2>Settings</h2>
     <div class="panel">
       <label for="field-xdm-base-url">XDM base URL for generated refs</label>
@@ -165,6 +211,7 @@ function deleteJourney(slug, label) {
     .then(({ ok, data }) => {
       if (!ok) throw new Error(data.error || "delete failed");
       loadLiveJourneys();
+      loadLibrary();
     })
     .catch(err => alert("Could not delete: " + err.message));
 }
@@ -182,6 +229,131 @@ function loadLiveJourneys() {
     });
 }
 loadLiveJourneys();
+
+// Shared library: requirements and KPIs that journeys reference. Edits here change every journey that uses
+// the entry, so the editor says how many journeys that is before saving.
+let library = { requirements: [], kpis: [] };
+let libraryEditing = null;   // {kind: "requirement" | "kpi", id: "" for a new entry}
+
+function libraryCell(text) {
+  const td = document.createElement("td");
+  td.textContent = text;
+  return td;
+}
+
+function libraryRow(tbody, cells, onEdit) {
+  const tr = document.createElement("tr");
+  cells.forEach(text => tr.appendChild(libraryCell(text)));
+  const actionTd = document.createElement("td");
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "secondary";
+  edit.textContent = "Edit";
+  edit.addEventListener("click", onEdit);
+  actionTd.appendChild(edit);
+  tr.appendChild(actionTd);
+  tbody.appendChild(tr);
+}
+
+function renderLibrary() {
+  const reqBody = document.getElementById("library-requirements-tbody");
+  const kpiBody = document.getElementById("library-kpis-tbody");
+  reqBody.innerHTML = "";
+  kpiBody.innerHTML = "";
+  library.requirements.forEach(e => libraryRow(reqBody, [e.label, e.comment || "not set", String(e.usage)],
+    () => openLibraryEditor("requirement", e)));
+  library.kpis.forEach(e => libraryRow(kpiBody, [e.label, e.formula, e.owner,
+    e.target === null || e.target === undefined ? "not set" : String(e.target), String(e.usage)],
+    () => openLibraryEditor("kpi", e)));
+}
+
+function loadLibrary() {
+  const note = document.getElementById("library-note");
+  fetch("/api/library")
+    .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
+    .then(data => {
+      library = data;
+      renderLibrary();
+      const reqs = data.requirements.length, kpis = data.kpis.length;
+      note.textContent = reqs || kpis
+        ? "Live data: " + reqs + " requirement(s), " + kpis + " KPI(s)."
+        : "No shared entries yet. Create them here, or pick \"Create new\" in a journey's form.";
+    })
+    .catch(() => {
+      note.textContent = "Library needs the local API (`martech-knowledge-graph serve`).";
+    });
+}
+
+function openLibraryEditor(kind, entry) {
+  libraryEditing = { kind: kind, id: entry ? entry.id : "" };
+  const isKpi = kind === "kpi";
+  document.getElementById("library-editor-title").textContent =
+    (entry ? "Edit " : "New ") + (isKpi ? "KPI" : "requirement");
+  document.getElementById("lib-kpi-fields").hidden = !isKpi;
+  document.getElementById("lib-comment-label").textContent = isKpi ? "Note (optional)" : "Description";
+  document.getElementById("lib-label").value = entry ? entry.label : "";
+  document.getElementById("lib-formula").value = entry && entry.formula ? entry.formula : "";
+  document.getElementById("lib-owner").value = entry && entry.owner ? entry.owner : "";
+  document.getElementById("lib-target").value = entry && entry.target !== null && entry.target !== undefined ? entry.target : "";
+  document.getElementById("lib-comment").value = entry ? (entry.comment || "") : "";
+  const warning = document.getElementById("library-editor-warning");
+  if (!entry) {
+    warning.textContent = "A new entry. Journeys can pick it from their form.";
+  } else if (entry.usage > 0) {
+    warning.textContent = "Used by " + entry.usage + (entry.usage === 1 ? " journey" : " journeys") +
+      ". Saving changes every one of them.";
+  } else {
+    warning.textContent = "Not used by any journey yet.";
+  }
+  document.getElementById("library-status").style.display = "none";
+  document.getElementById("library-editor").hidden = false;
+  document.getElementById("lib-label").focus();
+}
+
+function closeLibraryEditor() {
+  libraryEditing = null;
+  document.getElementById("library-editor").hidden = true;
+}
+
+function showLibraryStatus(text) {
+  const el = document.getElementById("library-status");
+  el.textContent = text;
+  el.style.display = "inline";
+}
+
+document.getElementById("btn-new-requirement").addEventListener("click", () => openLibraryEditor("requirement", null));
+document.getElementById("btn-new-kpi").addEventListener("click", () => openLibraryEditor("kpi", null));
+document.getElementById("btn-library-cancel").addEventListener("click", closeLibraryEditor);
+
+document.getElementById("btn-library-save").addEventListener("click", () => {
+  if (!libraryEditing) return;
+  const body = {
+    label: document.getElementById("lib-label").value,
+    comment: document.getElementById("lib-comment").value,
+  };
+  if (libraryEditing.kind === "kpi") {
+    body.formula = document.getElementById("lib-formula").value;
+    body.owner = document.getElementById("lib-owner").value;
+    body.target = document.getElementById("lib-target").value;
+  }
+  const path = "/api/library/" + libraryEditing.kind +
+    (libraryEditing.id ? "/" + encodeURIComponent(libraryEditing.id) : "");
+  showLibraryStatus("Saving…");
+  fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (!ok) throw new Error(data.error || "save failed");
+      closeLibraryEditor();
+      loadLibrary();
+    })
+    .catch(err => showLibraryStatus("Could not save (" + err.message + ")."));
+});
+
+loadLibrary();
 
 function updateXdmExample() {
   const base = document.getElementById("field-xdm-base-url").value || "";

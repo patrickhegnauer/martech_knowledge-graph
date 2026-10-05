@@ -69,6 +69,7 @@ exactly what's wired to what.
 | `src/martech_knowledge_graph/examples/*.ttl` | Bundled example journey data (a 4-step ecommerce funnel, a 2-step login flow): this is the **demo** workspace itself (read-only), toggled on/off with the rest of the UI's data-mode switcher, not copied anywhere |
 | `src/martech_knowledge_graph/graph_explorer.py` | Internal library `server.py` and `mcp_server.py` use to load the graph and extract data from it; not a standalone tool |
 | `src/martech_knowledge_graph/journey_builder.py` | Generates correct turtle from structured input (a spreadsheet or Python), instead of hand-writing it |
+| `src/martech_knowledge_graph/library.py` | The shared requirement and KPI library: reads and writes `library-instances.ttl` in your data directory; see [Shared requirements and KPIs](#shared-requirements-and-kpis-library) |
 | `src/martech_knowledge_graph/workspace.py` | Shared demo/org mode resolution, read by `server.py` and `mcp_server.py` so both processes agree on which workspace is active |
 | `src/martech_knowledge_graph/cja_client.py` | Small stdlib client for the Adobe CJA API (OAuth Server-to-Server token, data views, metrics, dimensions) used by the CJA sync |
 | `src/martech_knowledge_graph/export.py` | Behind `martech-knowledge-graph export-mcp`: scaffolds a folder you can deploy to Prefect Horizon, see [MCP server](#mcp-server) |
@@ -288,6 +289,30 @@ rename, add or remove stages and save (the journey's file is rewritten from the 
 things the form can't preserve (e.g. an unknown property or several journeys in one file) are refused with a clear
 message instead of being changed. Data layer variables are maintained per component, not in this form.
 
+### Shared requirements and KPIs (library)
+
+A requirement or KPI that several journeys use is stored once, in `library-instances.ttl` in your data
+directory. Each journey refers to it by URI, the same way journeys share components, so two journeys that
+serve the same business requirement point at one entry instead of two copies.
+
+In the journey form, the Requirement and KPI fields each start with a picker: choose an existing entry, or
+pick **Create new** to add one to the library. A shared entry's fields are read-only until you press
+**Edit shared entry**, because a change there changes every journey that uses it, and the form tells you how
+many journeys that is. Deleting a journey never deletes library entries; an entry that no journey uses stays
+in the library with a usage count of 0.
+
+The Journeys page has a **Shared library** section that lists every requirement and KPI with its usage count,
+and lets you create and edit them there.
+
+Things to know:
+- Journeys saved before the library existed keep their own requirement and KPI inside their file. The form
+  shows them as "This journey only" until you pick a shared entry for them. Merging existing duplicates into
+  the library is not automated yet.
+- Journeys generated from a CSV or from Python keep their own requirement and KPI unless their turtle links to
+  library URIs. The form's library picker works on any journey that has been saved through it.
+- The library belongs to your own data. The bundled demo data has no library, and the library refuses
+  changes while the workspace is in demo mode.
+
 **CSV import (Web UI)**: paste or upload a CSV on the Journeys page and click Generate turtle. Handy for
 creating several journeys at once. Runs the same builder below and writes the result straight into your data
 directory.
@@ -339,6 +364,9 @@ thing as an `xdm_base_url` argument.
 - ✅ Demo/org mode switcher: every page shows which workspace is active and lets you switch between the
   bundled read-only demo data and your own data directory; Home becomes a live kickstart checklist once
   you're on your own (typically empty) data.
+- ✅ Shared requirement and KPI library (your own data only): requirements and KPIs are reused across
+  journeys by URI, with usage counts and editing on the Journeys page. See
+  [Shared requirements and KPIs](#shared-requirements-and-kpis-library).
 - ✅ Configurable XDM base URL for generated component refs: set your org's real prefix once (Journeys
   page) instead of the `SANDBOX_NAME` placeholder ending up in every generated file.
 - ✅ MCP server (`martech-knowledge-graph mcp`): `run_sparql` + `get_ontology_schema` via FastMCP,
