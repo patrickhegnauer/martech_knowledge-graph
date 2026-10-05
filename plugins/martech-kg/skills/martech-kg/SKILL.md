@@ -1,6 +1,6 @@
 ---
 name: martech-kg
-description: Use when the user asks about the martech / customer experience knowledge graph: customer journeys and their stages, KPIs and the requirements behind them, the components (metrics and dimensions) that measure them, data layer variables, and component definitions, caveats and owners. Also use to trace a KPI back to its tracking, or to check what a component or data layer variable feeds.
+description: "Use when the user asks about the martech / customer experience knowledge graph: customer journeys and their stages, KPIs and the requirements behind them, the components (metrics and dimensions) that measure them, data layer variables, and component definitions, caveats and owners. Also use to trace a KPI back to its tracking, or to check what a component or data layer variable feeds."
 ---
 
 # Martech knowledge graph
