@@ -5,14 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Journeys · MarTech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
+<script>(function(){try{var t=localStorage.getItem("mkg-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 </head>
 <body>
+<button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-label="Menu">&#9776;</button>
+<div class="app-shell">
+<aside class="sidebar" id="sidebar">
 <header class="site-header">
   <h1>MarTech Knowledge Graph: Context Layer Platform</h1>
 </header>
 <nav class="site-nav">
   <ul>
     <li><a href="index.html">Home</a></li>
+    <li><a href="sources.html">Sources</a></li>
     <li><a href="ontology.html">Ontology</a></li>
     <li><a href="components.html">Components</a></li>
     <li class="active"><a href="journeys.html">Journeys</a></li>
@@ -23,6 +28,10 @@
     <li><a href="skills.html">Skills</a></li>
   </ul>
 </nav>
+<div class="sidebar-footer" id="sidebar-footer"></div>
+</aside>
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+<div class="app-main">
 <main>
   <section>
     <h2>Journeys</h2>
@@ -163,6 +172,8 @@ martech:journey_ecommerce
   </section>
 </main>
 <footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running; see components.html for setup. Falls back to a static example otherwise.</footer>
+</div>
+</div>
 
 <script>
 const CSV_COLUMNS = [
@@ -241,9 +252,20 @@ function libraryCell(text) {
   return td;
 }
 
-function libraryRow(tbody, cells, onEdit) {
+function libraryNameCell(text, pillType) {
+  const td = document.createElement("td");
+  const pill = document.createElement("span");
+  pill.className = "type-pill type-" + pillType;
+  pill.textContent = pillType === "kpi" ? "KPI" : "Requirement";
+  td.appendChild(pill);
+  td.appendChild(document.createTextNode(" " + text));
+  return td;
+}
+
+function libraryRow(tbody, pillType, cells, onEdit) {
   const tr = document.createElement("tr");
-  cells.forEach(text => tr.appendChild(libraryCell(text)));
+  tr.appendChild(libraryNameCell(cells[0], pillType));
+  cells.slice(1).forEach(text => tr.appendChild(libraryCell(text)));
   const actionTd = document.createElement("td");
   const edit = document.createElement("button");
   edit.type = "button";
@@ -260,9 +282,9 @@ function renderLibrary() {
   const kpiBody = document.getElementById("library-kpis-tbody");
   reqBody.innerHTML = "";
   kpiBody.innerHTML = "";
-  library.requirements.forEach(e => libraryRow(reqBody, [e.label, e.comment || "not set", String(e.usage)],
+  library.requirements.forEach(e => libraryRow(reqBody, "requirement", [e.label, e.comment || "not set", String(e.usage)],
     () => openLibraryEditor("requirement", e)));
-  library.kpis.forEach(e => libraryRow(kpiBody, [e.label, e.formula, e.owner,
+  library.kpis.forEach(e => libraryRow(kpiBody, "kpi", [e.label, e.formula, e.owner,
     e.target === null || e.target === undefined ? "not set" : String(e.target), String(e.usage)],
     () => openLibraryEditor("kpi", e)));
 }

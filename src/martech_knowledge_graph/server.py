@@ -1030,6 +1030,33 @@ def create_app(data_dir: Path) -> Flask:
             return jsonify({"error": f"no data file '{name}'"}), 404
         return jsonify({"name": path.name, "content": path.read_text(encoding="utf-8")})
 
+    @app.route("/api/sources", methods=["GET"])
+    def api_sources():
+        """What components were actually synced from where. Only Adobe CJA is wired up as a source today;
+        this groups the components already in the workspace by the CJA data view they came from, so the
+        page stays true to what's real instead of listing connectors that don't exist yet."""
+        merged = merged_instances()
+        by_dv = {}
+        for s in merged.subjects(RDF.type, MARTECH.Component):
+            for ref in merged.objects(s, MARTECH.refs):
+                r = str(ref)
+                if r.startswith(CJA_URN_PREFIX):
+                    dv_id = r[len(CJA_URN_PREFIX):].split(":", 1)[0]
+                    by_dv.setdefault(dv_id, set()).add(s)
+        data_views = [{"id": dv, "component_count": len(comps)} for dv, comps in sorted(by_dv.items())]
+
+        sync_file = cja_sync_file()
+        last_synced = (datetime.fromtimestamp(sync_file.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+                       if sync_file.exists() else None)
+
+        return jsonify({
+            "cja": {
+                "data_views": data_views,
+                "total_components": sum(d["component_count"] for d in data_views),
+                "last_synced": last_synced,
+            },
+        })
+
     @app.route("/api/graph-data", methods=["GET"])
     def api_graph_data():
         g = ge.load_graph(ontology_path=ONTOLOGY_FILE, script_dir=current_dir())

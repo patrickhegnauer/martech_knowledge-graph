@@ -5,14 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MCP · MarTech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
+<script>(function(){try{var t=localStorage.getItem("mkg-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 </head>
 <body>
+<button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-label="Menu">&#9776;</button>
+<div class="app-shell">
+<aside class="sidebar" id="sidebar">
 <header class="site-header">
   <h1>MarTech Knowledge Graph: Context Layer Platform</h1>
 </header>
 <nav class="site-nav">
   <ul>
     <li><a href="index.html">Home</a></li>
+    <li><a href="sources.html">Sources</a></li>
     <li><a href="ontology.html">Ontology</a></li>
     <li><a href="components.html">Components</a></li>
     <li><a href="journeys.html">Journeys</a></li>
@@ -23,6 +28,10 @@
     <li><a href="skills.html">Skills</a></li>
   </ul>
 </nav>
+<div class="sidebar-footer" id="sidebar-footer"></div>
+</aside>
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+<div class="app-main">
 <main>
   <section>
     <div class="status-banner">Built. Run it from a terminal. There's no one-click "start" button on this page yet (that's a deliberate next step, not a gap); until then, the CLI is the real, working way to run it.</div>
@@ -85,6 +94,8 @@
   </section>
 </main>
 <footer class="site-footer">Static content: the only script on this page is the shared demo/org mode banner (js/mode-banner.js).</footer>
+</div>
+</div>
 <script src="js/mode-banner.js"></script>
 </body>
 </html>

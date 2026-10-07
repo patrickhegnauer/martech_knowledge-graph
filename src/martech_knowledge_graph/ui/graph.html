@@ -5,15 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Graph · MarTech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
+<script>(function(){try{var t=localStorage.getItem("mkg-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 <script src="vendor/vis-network.min.js"></script>
 </head>
 <body>
+<button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-label="Menu">&#9776;</button>
+<div class="app-shell">
+<aside class="sidebar" id="sidebar">
 <header class="site-header">
   <h1>MarTech Knowledge Graph: Context Layer Platform</h1>
 </header>
 <nav class="site-nav">
   <ul>
     <li><a href="index.html">Home</a></li>
+    <li><a href="sources.html">Sources</a></li>
     <li><a href="ontology.html">Ontology</a></li>
     <li><a href="components.html">Components</a></li>
     <li><a href="journeys.html">Journeys</a></li>
@@ -24,6 +29,10 @@
     <li><a href="skills.html">Skills</a></li>
   </ul>
 </nav>
+<div class="sidebar-footer" id="sidebar-footer"></div>
+</aside>
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+<div class="app-main">
 <main>
   <section>
     <h2>Graph viewer</h2>
@@ -68,6 +77,8 @@
   </section>
 </main>
 <footer class="site-footer">Graph page renders live via vendored vis-network (JS). Every page also includes the shared demo/org mode banner (js/mode-banner.js); otherwise the rest stay static and JS-free.</footer>
+</div>
+</div>
 
 <script>
 try { localStorage.setItem("mkg-visited-graph", "1"); } catch (e) { /* private browsing or blocked storage: harmless, just skips the Home checklist tick */ }

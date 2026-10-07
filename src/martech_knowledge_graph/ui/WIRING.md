@@ -674,3 +674,78 @@ martech_knowledge_graph.cli mcp --transport stdio --data-dir ...` — tool list,
 classes/24 properties), `run_sparql` SELECT (`COUNT(*)` matches the known 238-triple demo graph), ASK, and
 a `DELETE DATA` attempt returning a clean `{"error": "ParseException: ..."}` — same checks as the HTTP
 transport verification above, all passing over stdio.
+
+## Left sidebar navigation + unified entity-type colors (redesign, from a Claude Design mockup)
+
+The user designed a look in Claude Design (a mocked-up "Lattice" product) and asked for it applied to the
+real UI. Only the visual design traveled — the mockup's own runtime (`support.js`, a React-based
+`x-dc`/`sc-for`/`sc-if` canvas templating system) isn't something this project depends on and wasn't
+adopted; no fictitious screens or features (a sync-diff review queue, a drag-and-drop journey canvas, an
+NL-to-SQL query chat) were built, only the existing pages were restyled.
+
+- **Nav**: every page's `header.site-header` + `nav.site-nav` (previously a sticky top bar + horizontal
+  tab row) now live inside a left `<aside class="sidebar">`, wrapped by `.app-shell` / `.app-main` in
+  `style.css`. Below 760px the sidebar becomes an off-canvas drawer (`transform: translateX(-100%)`),
+  opened by a hamburger button (`#sidebar-toggle`) and a backdrop (`#sidebar-backdrop`) — same show/hide
+  shape as the existing CJA modal, not a new pattern. Applied identically to all pages by a script that
+  matched the (byte-identical) old header/nav block per file and swapped it; any page that didn't match
+  would have been reported, not silently mangled — all matched.
+- **`js/mode-banner.js`**: the mode switcher and theme toggle now render into `#sidebar-footer` (the
+  mockup's workspace/user card) instead of the old header bar — `ensureHeaderActions()` retargeted, the
+  rest of the logic (confirm-before-org-switch, theme cycling, `/api/state` fetch) untouched. Also added:
+  the sidebar drawer open/close wiring, and small live counts next to the Components/Journeys nav links
+  from the same `/api/state` response this script already fetches.
+- **Type colors**: `graph.html` already had a fixed hex color per ontology class (`GROUP_COLORS`, used for
+  its node legend) — those exact values were copied into seven `--type-*` CSS variables and a `.type-pill`
+  component (muted tint + small dot), rather than inventing a new palette. `graph.html` itself was not
+  touched, so the working graph page carried zero risk from this change. Metric and dimension share
+  `--type-component` (graph.html only ever had one color for "Component"); distinguished by a filled vs.
+  ring dot instead of a second hue. Applied to: Components table's Type column, the Journeys page's shared
+  library rows (requirement/KPI), and the Query page's ontology-class sidebar list.
+
+Verified with headless Edge screenshots (desktop, mobile collapsed, mobile drawer forced open, dark mode)
+across Home, Components, Graph, Journeys, Journey edit, Query and Ontology, plus a real org workspace (not
+just the empty demo) to see the library pills and nav counts with live numbers. `graph.html`'s own
+rendering is unchanged.
+
+## Sources page (new) — what's actually been synced, grouped by data view
+
+Added so the user can see what's been pulled in so far, and have room to grow if more source *types* get
+connected later. Deliberately not a literal copy of the mockup's Sources screen (sync-diff review queue,
+per-component change approval) — that workflow doesn't exist here; sync just adds/enriches silently, as
+it always has. This page is a read-only status view over real data, nothing invented.
+
+- **`server.py`**: `GET /api/sources` groups every `Component` by the `<dataViewId>` portion of its
+  `urn:cja:<dv>:<id>` ref (the ref CJA sync already writes), returning `{cja: {data_views: [{id,
+  component_count}], total_components, last_synced}}`. `last_synced` is `components-instances.ttl`'s own
+  mtime (one sync file can hold several data views, so this is file-level, not per-data-view). No new
+  storage, no new sync behavior — purely a read over what `api_cja_sync` already wrote.
+- **`ui/sources.html`** (new page, added to every page's nav, right after Home): one `.source-card` for
+  Adobe CJA — connection status (reusing `/api/cja/config`, same `cja-status-line`/`.connected` styling
+  `components.html` already uses), total components, a row per synced data view with its id and count, and
+  a link to `components.html` for the actual connect/sync flow (kept in one place, not duplicated).
+- **`style.css`**: `.source-card` / `.source-avatar` / `.source-meta` / `.source-dataview-row`, sized and
+  colored from the same tokens as the rest of the page (no new colors).
+
+Verified against the real org workspace (one data view, 126 components, real "Connected" status) and
+against the demo workspace (CJA not configured, nothing synced, empty-state copy reads cleanly).
+
+## Sources nav count + journey shape diagram (small follow-ups)
+
+- **Sources nav count**: `js/mode-banner.js`'s `renderNavCounts()` only had Components/Journeys (both already
+  in `/api/state`). Added a small separate `/api/sources` fetch so the Sources link gets a count too (number
+  of synced data views); fails silently (no count shown) rather than breaking the rest of the nav if it
+  can't reach the server.
+- **Journey shape diagram** (`journey-edit.html`): a read-only row of cards, one per stage in order,
+  connected by arrows, below the Stages table. Deliberately not the mockup's branching canvas — our
+  journeys are a flat ordered list in the ontology (no fork/merge concept), and we don't pull real
+  conversion-percentage data (CJA's Reporting API, not the Component Metadata API this project uses), so a
+  canvas implying either would be decorative rather than real. This reads directly from the Stages table's
+  current DOM state (no new API call), re-rendering via `renderJourneyDiagram()` on every add/remove/reorder
+  (hooked into the existing `renumber()`) and on every field edit (delegated `input`/`change` listeners on
+  `#stages-tbody`), so it stays live while editing. Each card shows the stage name, its component's
+  type-pill (reusing the type-pill palette; a new `componentTypeByKey` map feeds it from `/api/state`'s
+  already-fetched component list), and a "Rolls up to KPI" pill on the terminal stage.
+
+Verified against a real journey (4 stages, dimension-typed component, terminal rollup) end to end in a
+live browser render.

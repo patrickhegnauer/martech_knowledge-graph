@@ -5,14 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Components · MarTech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
+<script>(function(){try{var t=localStorage.getItem("mkg-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 </head>
 <body>
+<button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-label="Menu">&#9776;</button>
+<div class="app-shell">
+<aside class="sidebar" id="sidebar">
 <header class="site-header">
   <h1>MarTech Knowledge Graph: Context Layer Platform</h1>
 </header>
 <nav class="site-nav">
   <ul>
     <li><a href="index.html">Home</a></li>
+    <li><a href="sources.html">Sources</a></li>
     <li><a href="ontology.html">Ontology</a></li>
     <li class="active"><a href="components.html">Components</a></li>
     <li><a href="journeys.html">Journeys</a></li>
@@ -23,6 +28,10 @@
     <li><a href="skills.html">Skills</a></li>
   </ul>
 </nav>
+<div class="sidebar-footer" id="sidebar-footer"></div>
+</aside>
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+<div class="app-main">
 <main class="wide">
   <section>
     <h2>Components</h2>
@@ -174,6 +183,8 @@
 </div>
 
 <footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`). Sync calls the real CJA API with your saved credentials and writes new components to components-instances.ttl; components you already have are never overwritten. Falls back to a static example table if the API isn't running.</footer>
+</div>
+</div>
 
 <script>
 function renderComponentsTable(components) {
@@ -182,7 +193,20 @@ function renderComponentsTable(components) {
   components.forEach(c => {
     const tr = document.createElement("tr");
     tr.dataset.componentId = c.key;
-    [[c.name, "cell-wrap"], [c.type, ""], [c.cja_id, "cell-truncate"], [c.xdm_path || "—", "cell-truncate"], [(c.data_layer_variables || []).join(", ") || "—", "cell-truncate"], [c.owner || "—", "cell-wrap"]].forEach(([text, cls]) => {
+    const nameTd = document.createElement("td");
+    nameTd.className = "cell-wrap";
+    nameTd.textContent = c.name;
+    nameTd.title = c.name;
+    tr.appendChild(nameTd);
+
+    const typeTd = document.createElement("td");
+    const typePill = document.createElement("span");
+    typePill.className = "type-pill type-" + (c.type || "component");
+    typePill.textContent = c.type;
+    typeTd.appendChild(typePill);
+    tr.appendChild(typeTd);
+
+    [[c.cja_id, "cell-truncate"], [c.xdm_path || "—", "cell-truncate"], [(c.data_layer_variables || []).join(", ") || "—", "cell-truncate"], [c.owner || "—", "cell-wrap"]].forEach(([text, cls]) => {
       const td = document.createElement("td");
       td.textContent = text;
       td.title = text;

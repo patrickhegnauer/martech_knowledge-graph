@@ -5,14 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Journey · MarTech Knowledge Graph</title>
 <link rel="stylesheet" href="css/style.css">
+<script>(function(){try{var t=localStorage.getItem("mkg-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 </head>
 <body>
+<button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-label="Menu">&#9776;</button>
+<div class="app-shell">
+<aside class="sidebar" id="sidebar">
 <header class="site-header">
   <h1>MarTech Knowledge Graph: Context Layer Platform</h1>
 </header>
 <nav class="site-nav">
   <ul>
     <li><a href="index.html">Home</a></li>
+    <li><a href="sources.html">Sources</a></li>
     <li><a href="ontology.html">Ontology</a></li>
     <li><a href="components.html">Components</a></li>
     <li class="active"><a href="journeys.html">Journeys</a></li>
@@ -23,6 +28,10 @@
     <li><a href="skills.html">Skills</a></li>
   </ul>
 </nav>
+<div class="sidebar-footer" id="sidebar-footer"></div>
+</aside>
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+<div class="app-main">
 <main class="wide">
   <section>
     <h2 id="page-title">New Journey</h2>
@@ -88,6 +97,10 @@
       <p class="note note-error" id="components-empty" style="display:none;">No components yet. <a href="components.html">Sync them from CJA</a> first.</p>
       <button type="button" id="btn-add-stage" class="secondary">Add stage</button>
 
+      <h3>Journey shape</h3>
+      <p class="note">A live view of the stages above, in order. Read-only: edit the table to change it. Each journey here is a straight line, so there's nothing to branch or position; this just makes the path easier to scan than the table.</p>
+      <div class="journey-diagram" id="journey-diagram"></div>
+
       <p>
         <button type="button" id="btn-save-journey">Save journey</button>
         <span id="save-status" class="note" style="display:none;"></span>
@@ -101,6 +114,8 @@
   </section>
 </main>
 <footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`). Saving writes the journey's file in your data directory. Components, requirements and KPIs are referenced, never copied; requirements and KPIs you create here are added to the shared library.</footer>
+</div>
+</div>
 
 <script>
 const slugParam = new URLSearchParams(location.search).get("slug");
@@ -108,6 +123,7 @@ const editing = !!slugParam;
 const $ = id => document.getElementById(id);
 const componentByLabel = {};   // datalist text -> component key
 const labelByKey = {};         // component key -> datalist text
+const componentTypeByKey = {}; // component key -> "metric" | "dimension", for the journey diagram's pills
 let slugTouched = false;
 let savedAsExisting = false;   // once a new journey is saved, later saves edit that file
 
@@ -293,6 +309,72 @@ function addStageRow(stage) {
 
 function renumber() {
   Array.from($("stages-tbody").children).forEach((tr, i) => { tr.firstChild.textContent = String(i + 1); });
+  renderJourneyDiagram();
+}
+
+// Read-only live diagram of the stage table above: one card per row, in order, connected by arrows.
+// No branches and no manual positioning -- a journey here is always a straight line, so this is just the
+// same data as the table, easier to scan. Re-rendered on every add/remove/reorder (via renumber()) and on
+// every edit to a row's fields (input/change listeners below).
+function renderJourneyDiagram() {
+  const container = $("journey-diagram");
+  if (!container) return;
+  const rows = Array.from($("stages-tbody").children);
+  container.innerHTML = "";
+  if (!rows.length) {
+    const note = document.createElement("p");
+    note.className = "note";
+    note.textContent = "Add stages above to see the journey's shape here.";
+    container.appendChild(note);
+    return;
+  }
+  rows.forEach((tr, i) => {
+    if (i > 0) {
+      const arrow = document.createElement("span");
+      arrow.className = "journey-diagram-arrow";
+      arrow.textContent = "→";
+      container.appendChild(arrow);
+    }
+    const label = tr.querySelector(".stage-label").value.trim() || "(untitled stage)";
+    const compText = tr.querySelector(".stage-component").value.trim();
+    const compKey = resolveComponent(compText);
+    const compType = compKey ? componentTypeByKey[compKey] : "";
+    const filter = tr.querySelector(".stage-filter").value.trim();
+    const rollsUp = tr.querySelector(".stage-rollup").checked;
+
+    const step = document.createElement("div");
+    step.className = "journey-diagram-step";
+
+    const num = document.createElement("span");
+    num.className = "journey-diagram-num";
+    num.textContent = String(i + 1);
+    step.appendChild(num);
+
+    const name = document.createElement("div");
+    name.className = "journey-diagram-name";
+    name.textContent = label;
+    step.appendChild(name);
+
+    if (compText) {
+      const pill = document.createElement("span");
+      pill.className = "type-pill type-" + (compType || "component");
+      pill.textContent = compType || "component";
+      step.appendChild(pill);
+    }
+    if (filter) {
+      const f = document.createElement("div");
+      f.className = "journey-diagram-filter";
+      f.textContent = filter;
+      step.appendChild(f);
+    }
+    if (rollsUp) {
+      const kpi = document.createElement("span");
+      kpi.className = "type-pill type-kpi";
+      kpi.textContent = "Rolls up to KPI";
+      step.appendChild(kpi);
+    }
+    container.appendChild(step);
+  });
 }
 
 function resolveComponent(text) {
@@ -365,6 +447,8 @@ $("field-label").addEventListener("input", () => {
 });
 $("field-slug").addEventListener("input", () => { slugTouched = true; });
 $("btn-add-stage").addEventListener("click", () => addStageRow());
+$("stages-tbody").addEventListener("input", renderJourneyDiagram);
+$("stages-tbody").addEventListener("change", renderJourneyDiagram);
 $("select-req").addEventListener("change", () => { picker.requirement.value = $("select-req").value; onPickerChange("requirement"); });
 $("select-kpi").addEventListener("change", () => { picker.kpi.value = $("select-kpi").value; onPickerChange("kpi"); });
 $("btn-unlock-req").addEventListener("click", () => { picker.requirement.update = true; lockFields("requirement", false); renderPickerNote("requirement"); });
@@ -413,6 +497,7 @@ fetch("/api/state")
       if (componentByLabel[text]) text += " [" + c.key + "]";
       componentByLabel[text] = c.key;
       labelByKey[c.key] = text;
+      componentTypeByKey[c.key] = c.type;
       const opt = document.createElement("option");
       opt.value = text;
       list.appendChild(opt);

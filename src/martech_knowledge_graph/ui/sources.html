@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sources · MarTech Knowledge Graph</title>
+<link rel="stylesheet" href="css/style.css">
+<script>(function(){try{var t=localStorage.getItem("mkg-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+</head>
+<body>
+<button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-label="Menu">&#9776;</button>
+<div class="app-shell">
+<aside class="sidebar" id="sidebar">
+<header class="site-header">
+  <h1>MarTech Knowledge Graph: Context Layer Platform</h1>
+</header>
+<nav class="site-nav">
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li class="active"><a href="sources.html">Sources</a></li>
+    <li><a href="ontology.html">Ontology</a></li>
+    <li><a href="components.html">Components</a></li>
+    <li><a href="journeys.html">Journeys</a></li>
+    <li><a href="graph.html">Graph</a></li>
+    <li><a href="query.html">Query</a></li>
+    <li><a href="data-files.html">Data Files</a></li>
+    <li><a href="mcp.html">MCP</a></li>
+    <li><a href="skills.html">Skills</a></li>
+  </ul>
+</nav>
+<div class="sidebar-footer" id="sidebar-footer"></div>
+</aside>
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+<div class="app-main">
+<main>
+  <section>
+    <h2>Sources</h2>
+    <p>Where the components in this workspace actually came from, and how much of each has been pulled in. Only Adobe CJA is wired up as a source today; if you connect another system later, it shows up here as another card, next to this one.</p>
+    <p class="note" id="live-mode-note">Checking for a local API…</p>
+
+    <div class="source-card">
+      <div class="source-card-head">
+        <div class="source-avatar">CJA</div>
+        <div class="source-card-title">
+          <div class="name">Adobe Customer Journey Analytics</div>
+          <div class="scope" id="cja-scope">Checking connection…</div>
+        </div>
+        <span id="cja-status-pill" class="cja-status-line">Not connected</span>
+      </div>
+      <div class="source-meta">
+        <span><strong id="cja-total-components">0</strong> components synced</span>
+        <span><strong id="cja-dataview-count">0</strong> data view(s)</span>
+        <span id="cja-last-synced">Never synced</span>
+      </div>
+      <div class="source-dataviews" id="cja-dataviews">
+        <p class="note" id="cja-dataviews-empty">No data view has been synced into this workspace yet.</p>
+      </div>
+      <p><a class="btn" href="components.html">Manage connection &amp; sync</a></p>
+    </div>
+  </section>
+</main>
+<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running. The actual connect/sync flow lives on the Components page; this is a read-only overview of what's already synced.</footer>
+</div>
+</div>
+
+<script>
+function renderDataViews(dataViews) {
+  const list = document.getElementById("cja-dataviews");
+  const empty = document.getElementById("cja-dataviews-empty");
+  list.innerHTML = "";
+  if (!dataViews.length) {
+    list.appendChild(empty);
+    return;
+  }
+  dataViews.forEach(dv => {
+    const row = document.createElement("div");
+    row.className = "source-dataview-row";
+    const code = document.createElement("code");
+    code.textContent = dv.id;
+    row.appendChild(code);
+    const count = document.createElement("span");
+    count.className = "count";
+    count.textContent = dv.component_count + " component" + (dv.component_count === 1 ? "" : "s");
+    row.appendChild(count);
+    list.appendChild(row);
+  });
+}
+
+function loadSources() {
+  const note = document.getElementById("live-mode-note");
+  Promise.all([
+    fetch("/api/sources").then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); }),
+    fetch("/api/cja/config").then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); }),
+  ])
+    .then(([sources, cjaConfig]) => {
+      note.textContent = "Live data.";
+
+      const pill = document.getElementById("cja-status-pill");
+      const scope = document.getElementById("cja-scope");
+      if (cjaConfig.configured) {
+        pill.textContent = "Connected";
+        pill.classList.add("connected");
+        scope.textContent = "Org " + cjaConfig.org_id;
+      } else {
+        pill.textContent = "Not connected";
+        pill.classList.remove("connected");
+        scope.textContent = "No credentials saved yet";
+      }
+
+      const cja = sources.cja;
+      document.getElementById("cja-total-components").textContent = cja.total_components;
+      document.getElementById("cja-dataview-count").textContent = cja.data_views.length;
+      document.getElementById("cja-last-synced").textContent =
+        cja.last_synced ? "Last synced " + cja.last_synced : "Never synced";
+      renderDataViews(cja.data_views);
+    })
+    .catch(() => {
+      note.textContent = "Could not reach the local API. Run `martech-knowledge-graph serve` to see your real sources.";
+    });
+}
+loadSources();
+</script>
+<script src="js/mode-banner.js"></script>
+</body>
+</html>
