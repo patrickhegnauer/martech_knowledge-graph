@@ -80,10 +80,17 @@ every endpoint, and the design decisions behind them.
 
 ## Setup
 
-Requires Python 3.10+.
+Requires Python 3.10 to 3.14.
+
+> **Python 3.15:** not supported yet. A dependency (`pyyaml`, pulled in by `fastmcp`) has no prebuilt
+> package for 3.15 yet, so on Windows `pip install` tries to compile it and fails with "Microsoft Visual
+> C++ 14.0 or greater is required". Use Python 3.14 or older: if several versions are installed, create
+> the environment with e.g. `py -3.13 -m venv .venv` on Windows or `python3.13 -m venv .venv` on
+> Mac/Linux. If you already created `.venv` with 3.15, delete the folder and create it again.
+
 ```
 git clone <this-repo-url>
-cd martech-knowledge-graph
+cd martech_knowledge-graph
 python -m venv .venv
 ```
 Activate it (`.venv\Scripts\Activate.ps1` on Windows PowerShell, `source .venv/bin/activate` on Mac/Linux), then:
