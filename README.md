@@ -56,9 +56,9 @@ flowchart LR
 
 The demo/org mode switch (top right of every page) changes which of `examples/` or `--data-dir` both
 processes read and write. This is resolved via the shared `workspace.py`, which reads the same
-`.mkg-mode` file; see [Web UI](#web-ui) and [MCP server](#mcp-server) below. `ui/WIRING.md` has the
-detailed, page-by-page version of the UI half of this diagram: every element ID, every endpoint, and
-exactly what's wired to what.
+`.mkg-mode` file; see [Web UI](#web-ui) and [MCP server](#mcp-server) below.
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) has the detailed version of this diagram: every module,
+every endpoint, and the design decisions behind them.
 
 ## What's in here
 
@@ -228,8 +228,8 @@ The web UI covers the whole loop: pull components, curate their business context
 browse the graph, and run SPARQL against it. It also has an ontology reference and a page listing the raw
 data files. `martech-knowledge-graph serve` serves it directly at `http://127.0.0.1:5055/`; every page
 also still works opened as a standalone file (e.g. if you only copied `src/martech_knowledge_graph/ui/`
-somewhere), falling back to static example data when the API isn't reachable. See `ui/WIRING.md` for
-exactly what's wired to what.
+somewhere), falling back to static example data when the API isn't reachable. See
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for exactly what's wired to what.
 
 Every page shows which workspace you're in and lets you switch (`ui/js/mode-banner.js`, the one script
 included everywhere): a banner across the top in demo mode, and a "Demo data" / "Your data" switcher in

@@ -10,7 +10,7 @@ venv/
 # A user's own data directory (default name from `martech-knowledge-graph serve`)
 martech-knowledge-graph-data/
 
-# Local one-time vendoring workflow for ui/vendor/ (see ui/WIRING.md) --
+# Local one-time vendoring workflow for ui/vendor/ (see docs/ARCHITECTURE.md) --
 # not part of the installed package, never needed by `martech-knowledge-graph serve`.
 node_modules/
 
