@@ -90,7 +90,9 @@ class CjaClient:
         return items
 
     def list_data_views(self):
-        return [{"id": d["id"], "name": d.get("name") or d["id"]} for d in self._get_all("/data/dataviews")]
+        # CJA only returns the name when asked for it; without the expansion each item is just an id.
+        return [{"id": d["id"], "name": d.get("name") or d["id"]}
+                for d in self._get_all("/data/dataviews", {"expansion": "name"})]
 
     def list_components(self, data_view_id):
         """[{"id", "name", "type", "description", "schema_path"}] for one data view.

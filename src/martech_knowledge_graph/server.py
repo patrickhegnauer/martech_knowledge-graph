@@ -83,6 +83,7 @@ def is_shared_cja_component(cja_id):
 
 SETTINGS_MARKER_NAME = ".mkg-settings.json"
 CJA_CONFIG_NAME = ".mkg-cja.json"
+CJA_DATAVIEWS_NAME = ".mkg-cja-dataviews.json"
 CJA_URN_PREFIX = "urn:cja:"
 DLV_FILE_NAME = "datalayer-instances.ttl"
 DLV_NS = Namespace("https://example.org/martech/data/datalayer/")
@@ -379,6 +380,7 @@ def create_app(data_dir: Path) -> Flask:
         is_pii = g.value(s, MARTECH.is_pii)
         refs = [str(o) for o in g.objects(s, MARTECH.refs)]
         ctype = str(g.value(s, MARTECH.component_type) or "")
+        dv_names = load_data_view_names()
 
         return jsonify({
             "key": key,
@@ -397,7 +399,8 @@ def create_app(data_dir: Path) -> Flask:
             "dlv_suggestions": sorted({str(m.value(d, RDFS.label) or ge._local_name(d))
                                        for m in [merged_instances()]
                                        for d in m.subjects(RDF.type, MARTECH.DataLayerVariable)}),
-            "data_view_id": next((r[len(CJA_URN_PREFIX):].split(":", 1)[0] for r in refs if r.startswith(CJA_URN_PREFIX)), ""),
+            "data_view_id": next(iter(data_view_ids_of(refs)), ""),
+            "data_views": [{"id": dv_id, "name": dv_names.get(dv_id, "")} for dv_id in data_view_ids_of(refs)],
             "source_file": path.name,
         })
 
@@ -465,6 +468,35 @@ def create_app(data_dir: Path) -> Flask:
             cja_clients[cache_key] = cja_client.CjaClient(*cache_key)
         return cja_clients[cache_key]
 
+    # Data view names, {id: name}. Not part of the ontology (a data view has no node in the graph, only the
+    # id inside each component's urn:cja: ref), so they are remembered next to the CJA config instead.
+    cja_dataviews_path = data_dir / CJA_DATAVIEWS_NAME
+
+    def load_data_view_names():
+        try:
+            names = json.loads(cja_dataviews_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        # An id stored as its own name is not a name (the list falls back to the id when CJA sends none).
+        return {dv_id: name for dv_id, name in names.items() if name and name != dv_id}
+
+    def remember_data_view_names(data_views):
+        names = load_data_view_names()
+        updated = {**names, **{dv["id"]: dv["name"] for dv in data_views if dv["name"] != dv["id"]}}
+        if updated != names:
+            data_dir.mkdir(parents=True, exist_ok=True)
+            cja_dataviews_path.write_text(json.dumps(updated, indent=2), encoding="utf-8")
+        return updated
+
+    def data_view_ids_of(refs):
+        ids = []
+        for r in refs:
+            if r.startswith(CJA_URN_PREFIX):
+                dv_id = r[len(CJA_URN_PREFIX):].split(":", 1)[0]
+                if dv_id not in ids:
+                    ids.append(dv_id)
+        return ids
+
     @app.route("/api/cja/config", methods=["GET"])
     def api_get_cja_config():
         cfg = load_cja_config()
@@ -522,9 +554,11 @@ def create_app(data_dir: Path) -> Flask:
         if client is None:
             return jsonify({"error": "CJA is not configured yet."}), 400
         try:
-            return jsonify({"data_views": client.list_data_views()})
+            data_views = client.list_data_views()
         except cja_client.CjaError as exc:
             return jsonify({"error": str(exc)}), 502
+        remember_data_view_names(data_views)
+        return jsonify({"data_views": data_views})
 
     @app.route("/api/cja/sync", methods=["POST"])
     def api_cja_sync():
@@ -1038,12 +1072,20 @@ def create_app(data_dir: Path) -> Flask:
         merged = merged_instances()
         by_dv = {}
         for s in merged.subjects(RDF.type, MARTECH.Component):
-            for ref in merged.objects(s, MARTECH.refs):
-                r = str(ref)
-                if r.startswith(CJA_URN_PREFIX):
-                    dv_id = r[len(CJA_URN_PREFIX):].split(":", 1)[0]
-                    by_dv.setdefault(dv_id, set()).add(s)
-        data_views = [{"id": dv, "component_count": len(comps)} for dv, comps in sorted(by_dv.items())]
+            for dv_id in data_view_ids_of(str(ref) for ref in merged.objects(s, MARTECH.refs)):
+                by_dv.setdefault(dv_id, set()).add(s)
+
+        names = load_data_view_names()
+        client = get_cja_client() if state["mode"] == "org" else None
+        if client is not None and any(dv not in names for dv in by_dv):
+            # Synced before names were remembered: look them up once. The page still works on the ids alone
+            # if CJA can't be reached.
+            try:
+                names = remember_data_view_names(client.list_data_views())
+            except cja_client.CjaError:
+                pass
+        data_views = [{"id": dv, "name": names.get(dv, ""), "component_count": len(comps)}
+                      for dv, comps in sorted(by_dv.items())]
 
         sync_file = cja_sync_file()
         last_synced = (datetime.fromtimestamp(sync_file.stat().st_mtime).strftime("%Y-%m-%d %H:%M")

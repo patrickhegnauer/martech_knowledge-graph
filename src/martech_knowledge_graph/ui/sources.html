@@ -75,9 +75,17 @@ function renderDataViews(dataViews) {
   dataViews.forEach(dv => {
     const row = document.createElement("div");
     row.className = "source-dataview-row";
+    const label = document.createElement("span");
+    if (dv.name) {
+      label.appendChild(document.createTextNode(dv.name + " ("));
+    }
     const code = document.createElement("code");
     code.textContent = dv.id;
-    row.appendChild(code);
+    label.appendChild(code);
+    if (dv.name) {
+      label.appendChild(document.createTextNode(")"));
+    }
+    row.appendChild(label);
     const count = document.createElement("span");
     count.className = "count";
     count.textContent = dv.component_count + " component" + (dv.component_count === 1 ? "" : "s");

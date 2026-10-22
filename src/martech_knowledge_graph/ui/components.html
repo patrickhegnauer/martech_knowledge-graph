@@ -341,7 +341,7 @@ function showDataviewStep() {
       data.data_views.forEach(dv => {
         const opt = document.createElement("option");
         opt.value = dv.id;
-        opt.textContent = dv.name;
+        opt.textContent = dv.name === dv.id ? dv.id : dv.name + " (" + dv.id + ")";
         select.appendChild(opt);
       });
       select.disabled = data.data_views.length === 0;

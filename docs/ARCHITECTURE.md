@@ -72,6 +72,7 @@ Files in an org data directory:
 | `.mkg-mode` | Mode switcher | `demo` or `org` |
 | `.mkg-settings.json` | Journeys page | `{"xdm_base_url": ...}` |
 | `.mkg-cja.json` | CJA connect dialog | CJA credentials, including the client secret |
+| `.mkg-cja-dataviews.json` | Data view listing, Sources page | Data view names, `{id: name}` |
 
 Everything matching `*-instances.ttl` is loaded automatically, so a new file needs no code change.
 `RESERVED_JOURNEY_SLUGS` (`components`, `datalayer`, `library`) keeps journey slugs from colliding with
@@ -174,6 +175,12 @@ which one defines a component.
 
 `/api/sources` groups components by the data view in their `urn:cja:` refs. `last_synced` is the mtime of
 `components-instances.ttl`, so it is per file, not per data view.
+
+**Data view names** are shown as `Name (ID)` on the Sources page, the component edit page and the sync
+dialog. A data view has no node in the graph, so its name isn't stored there. Instead, names are kept in
+`.mkg-cja-dataviews.json`, refreshed every time `/api/cja/dataviews` lists the data views. If
+`/api/sources` finds a data view without a known name and CJA is configured, it looks the names up once;
+if CJA can't be reached, the page shows the ID alone.
 
 ## Components
 

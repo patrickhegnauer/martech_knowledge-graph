@@ -133,7 +133,8 @@ martech-knowledge-graph serve --data-dir ./my-data --host 127.0.0.1 --port 8080
   `.mkg-settings.json` file in the same directory, and your CJA credentials (see
   [Connecting to CJA](#connecting-to-cja)) live in `.mkg-cja.json`. That file holds a secret; never
   commit or share this directory. Besides your journey files it collects `components-instances.ttl`
-  (synced components) and `datalayer-instances.ttl` (data layer variable mappings).
+  (synced components) and `datalayer-instances.ttl` (data layer variable mappings), plus
+  `.mkg-cja-dataviews.json` (the names of your CJA data views, shown as `Name (ID)`).
 - `--host` / `--port` (defaults `127.0.0.1` / `5055`).
 - `--debug`: enables Flask's debugger. Off by default; only pass this for local development, since the
   debugger allows arbitrary code execution if the port is ever reachable by anyone else.

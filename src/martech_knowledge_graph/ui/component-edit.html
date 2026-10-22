@@ -200,7 +200,8 @@ if (componentKey) {
       document.getElementById("ro-name").textContent = data.name;
       document.getElementById("ro-cja-id").textContent = data.cja_id;
       document.getElementById("ro-type").textContent = data.type;
-      document.getElementById("ro-dataview").textContent = data.data_view_id || "—";
+      document.getElementById("ro-dataview").textContent =
+        (data.data_views || []).map(dv => dv.name ? dv.name + " (" + dv.id + ")" : dv.id).join(", ") || "—";
       document.getElementById("ro-description").textContent = data.cja_description || "—";
       document.getElementById("field-definition").value = data.definition;
       document.getElementById("field-caveats").value = data.caveats;
