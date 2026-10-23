@@ -219,8 +219,8 @@ ontology and the bundled example data in its `references/` folder, so Coworker c
 without an MCP connection.
 
 - Run `python build_plugin.py` after any change to the ontology or the instance files. It regenerates
-  `plugins/martech-kg/skills/martech-kg/references/`, including a `context-snapshot.md` with one section per
-  journey.
+  `plugins/martech-kg/` (`plugin.json`, `SKILL.md` and `references/`, including a `context-snapshot.md` with
+  one section per journey).
 - Commit and push to the repository's default branch.
 - In Coworker, open Configurations, then Marketplaces, add this repository, and install the `martech-kg`
   plugin. After later pushes, update the marketplace.
@@ -229,6 +229,17 @@ without an MCP connection.
 By default the build uses the bundled, generic example data, so no organization data is committed.
 Passing `--data-dir` builds from another folder; that output contains that data, so keep it out of public
 repositories.
+
+**Your own organization's plugin.** To ship your real data, build the plugin into your own private
+repository instead. That repository then becomes your marketplace. The command is part of the installed
+tool, so it works without a clone of this repository:
+```
+martech-knowledge-graph build-plugin --data-dir . --out plugins/my-context --name my-context --description "What the skill covers and when to use it." --version 0.1.0
+```
+It writes a complete plugin folder (`.claude-plugin/plugin.json`, `skills/<name>/SKILL.md`, `references/`)
+and regenerates it on every run. Without any `*-instances.ttl` files it still produces a valid plugin
+containing the ontology only. Your repository also needs a `.claude-plugin/marketplace.json` listing the
+plugin, like the one in this repository.
 
 ## Web UI
 

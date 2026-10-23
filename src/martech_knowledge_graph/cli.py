@@ -1,4 +1,4 @@
-"""Command-line entry point: `martech-knowledge-graph serve` / `martech-knowledge-graph mcp`."""
+"""Command-line entry point: `martech-knowledge-graph serve` / `mcp` / `export-mcp` / `build-plugin`."""
 
 import argparse
 import sys
@@ -63,6 +63,28 @@ def main():
     )
     export_parser.add_argument("--name", default="martech-knowledge-graph", help="Title used in the README.")
 
+    plugin_parser = subparsers.add_parser(
+        "build-plugin",
+        help="Write a Coworker plugin folder (plugin.json, SKILL.md, references/) built from the graph.",
+    )
+    plugin_parser.add_argument("--out", required=True,
+                               help="Plugin folder to write, e.g. plugins/my-context. Regenerated on every build.")
+    plugin_parser.add_argument(
+        "--data-dir", default="./martech-knowledge-graph-data",
+        help="Org workspace to build from. Default: %(default)s",
+    )
+    plugin_parser.add_argument(
+        "--demo", action="store_true", help="Build from the bundled demo data instead."
+    )
+    plugin_parser.add_argument("--name", default="martech-kg", help="Plugin and skill name. Default: %(default)s")
+    plugin_parser.add_argument(
+        "--description",
+        default="Martech knowledge graph as a skill: journeys, KPIs, requirements, components, data layer "
+                "variables, caveats and owners.",
+        help="Plugin description, also used as the skill description.",
+    )
+    plugin_parser.add_argument("--version", help="Plugin version written to plugin.json, e.g. 0.1.0.")
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -83,6 +105,20 @@ def main():
         print(f"Exported {count} data file(s) from {source} to {out}")
         print("Next: push that folder to a PRIVATE GitHub repo and deploy it on Prefect Horizon "
               f"(entrypoint server.py:mcp). See {out / 'README.md'}")
+
+    elif args.command == "build-plugin":
+        from . import graph_explorer, plugin_builder
+
+        source = graph_explorer.EXAMPLES_DIR if args.demo else Path(args.data_dir).resolve()
+        out = Path(args.out).resolve()
+        if not any(source.glob("*-instances.ttl")):
+            print(f"Note: no *-instances.ttl files in {source}; the plugin will contain the ontology only.")
+        sources, triples = plugin_builder.build_plugin(
+            source, out, args.name, args.description, version=args.version
+        )
+        print(f"Built plugin '{args.name}' in {out} from {len(sources)} file(s), {triples} triples.")
+        if not args.demo:
+            print("The plugin contains your data: keep it in a private repository.")
 
     elif args.command == "mcp":
         from . import mcp_server

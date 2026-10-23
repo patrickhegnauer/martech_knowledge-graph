@@ -299,9 +299,20 @@ doesn't pay for FastMCP's imports.
   four example queries re-run at generation time to annotate their real row counts. The closing "Things to
   get right" section is a template for the org to fill in. Saved to `<data_dir>/skills/<slug>.md`; an
   existing name returns 409 unless `force` is set.
-- **Plugin marketplace:** `build_plugin.py` regenerates `plugins/martech-kg/` from the ontology and
-  instance files (bundled examples by default, or `--data-dir`). The plugin folder is generated output;
-  don't edit it by hand, and don't commit a build from real org data to a public repo.
+- **Plugin marketplace:** `plugin_builder.build_plugin()` writes a complete plugin folder: `plugin.json`,
+  `skills/<name>/SKILL.md` from a template, and `references/` (the ontology, every `*-instances.ttl` and a
+  generated `context-snapshot.md`). The `SANDBOX_NAME` warning is only added to `SKILL.md` when the data
+  still contains the placeholder, and a data folder without instance files still yields a valid plugin.
+  Two entry points:
+  - `build_plugin.py` (repo root) regenerates this repo's own `plugins/martech-kg/` from the bundled
+    examples, or from `--data-dir`.
+  - `martech-knowledge-graph build-plugin --out … --name … --description … --version …` is part of the
+    installed package, so an organization can build its own plugin into its private repo without
+    cloning this one.
+
+  The plugin folder is generated output; don't edit it by hand, and don't commit a build from real org
+  data to a public repo. `context-snapshot.md` starts with a `Generated:` timestamp, so a rebuild without
+  data changes still differs in that line (`git diff -I '^- Generated:'` ignores it).
 
 ## UI shell
 
