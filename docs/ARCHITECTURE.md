@@ -308,7 +308,8 @@ doesn't pay for FastMCP's imports.
     examples, or from `--data-dir`.
   - `martech-knowledge-graph build-plugin --out … --name … --description … --version …` is part of the
     installed package, so an organization can build its own plugin into its private repo without
-    cloning this one.
+    cloning this one. With `--skill-name`, the generated skill gets its own name inside the plugin, and
+    hand-written skills can sit next to it: only `plugin.json` and `skills/<skill-name>/` are written.
 
   The plugin folder is generated output; don't edit it by hand, and don't commit a build from real org
   data to a public repo. `context-snapshot.md` starts with a `Generated:` timestamp, so a rebuild without

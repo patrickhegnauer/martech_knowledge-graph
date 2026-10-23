@@ -84,6 +84,14 @@ def main():
         help="Plugin description, also used as the skill description.",
     )
     plugin_parser.add_argument("--version", help="Plugin version written to plugin.json, e.g. 0.1.0.")
+    plugin_parser.add_argument(
+        "--skill-name",
+        help="Name of the generated skill, if it differs from the plugin name. Other skills in the plugin's "
+             "skills/ folder are left untouched, so hand-written skills can live in the same plugin. "
+             "Default: same as --name",
+    )
+    plugin_parser.add_argument("--skill-description",
+                               help="Description of the generated skill. Default: same as --description")
 
     args = parser.parse_args()
 
@@ -114,7 +122,8 @@ def main():
         if not any(source.glob("*-instances.ttl")):
             print(f"Note: no *-instances.ttl files in {source}; the plugin will contain the ontology only.")
         sources, triples = plugin_builder.build_plugin(
-            source, out, args.name, args.description, version=args.version
+            source, out, args.name, args.description, version=args.version,
+            skill_name=args.skill_name, skill_description=args.skill_description,
         )
         print(f"Built plugin '{args.name}' in {out} from {len(sources)} file(s), {triples} triples.")
         if not args.demo:

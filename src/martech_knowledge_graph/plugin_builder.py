@@ -155,13 +155,16 @@ def build_snapshot(g, sources):
 
 
 def build_plugin(data_dir, out_dir, name, description, skill_description=None, version=None, author=None,
-                 keywords=None):
-    """Write a complete plugin folder to out_dir and return the list of source file names.
+                 keywords=None, skill_name=None):
+    """Write a plugin folder to out_dir and return the list of source file names.
 
     description goes into plugin.json; skill_description (default: the same text) is the SKILL.md
-    frontmatter description, which tells the agent when to use the skill. A data_dir without any
+    frontmatter description, which tells the agent when to use the skill. skill_name (default: name) lets
+    the generated skill sit in a plugin with a different name, next to other skills: only plugin.json and
+    skills/<skill_name>/ are written, any other skills/ folder is left alone. A data_dir without any
     *-instances.ttl files still produces a valid plugin, with the ontology only.
     """
+    skill_name = skill_name or name
     data_dir, out_dir = Path(data_dir), Path(out_dir)
     instance_files = sorted(data_dir.glob("*-instances.ttl"))
 
@@ -177,7 +180,7 @@ def build_plugin(data_dir, out_dir, name, description, skill_description=None, v
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
                              newline="\n")
 
-    skill_dir = out_dir / "skills" / name
+    skill_dir = out_dir / "skills" / skill_name
     references_dir = skill_dir / "references"
     if references_dir.exists():
         shutil.rmtree(references_dir)
@@ -191,8 +194,8 @@ def build_plugin(data_dir, out_dir, name, description, skill_description=None, v
     (references_dir / "context-snapshot.md").write_text(build_snapshot(g, sources), encoding="utf-8", newline="\n")
 
     # A YAML double-quoted string is a JSON string, so json.dumps quotes the description safely.
-    skill = SKILL_TEMPLATE.format(name=name, description=json.dumps(skill_description or description,
-                                                                   ensure_ascii=False))
+    skill = SKILL_TEMPLATE.format(name=skill_name, description=json.dumps(skill_description or description,
+                                                                         ensure_ascii=False))
     if any(PLACEHOLDER_SANDBOX in f.read_text(encoding="utf-8") for f in instance_files):
         skill += PLACEHOLDER_GAP
     (skill_dir / "SKILL.md").write_text(skill, encoding="utf-8", newline="\n")

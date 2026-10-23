@@ -238,7 +238,9 @@ martech-knowledge-graph build-plugin --data-dir . --out plugins/my-context --nam
 ```
 It writes a complete plugin folder (`.claude-plugin/plugin.json`, `skills/<name>/SKILL.md`, `references/`)
 and regenerates it on every run. Without any `*-instances.ttl` files it still produces a valid plugin
-containing the ontology only. Your repository also needs a `.claude-plugin/marketplace.json` listing the
+containing the ontology only. To keep hand-written skills in the same plugin, give the generated skill its
+own name with `--skill-name` (and optionally `--skill-description`). Only `plugin.json` and
+`skills/<skill-name>/` are rewritten; other folders under `skills/` are left alone. Your repository also needs a `.claude-plugin/marketplace.json` listing the
 plugin, like the one in this repository.
 
 ## Web UI
