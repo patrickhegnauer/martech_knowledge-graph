@@ -36,8 +36,15 @@
   <section>
     <h2>Journeys</h2>
     <p>A journey connects a business requirement and KPI to the stages of a customer path, each measured by a component. Build one in a form, picking components you have already synced and curated, or import many at once from a CSV below.</p>
-    <p><a class="btn" href="journey-edit.html">New journey</a></p>
+    <p><a class="btn" href="journey-edit.html" id="btn-new-journey">New journey</a></p>
     <p class="note" id="live-mode-note">Checking for a local API…</p>
+
+    <div class="toolbar" id="journeys-toolbar" hidden>
+      <select id="filter-journey-dataview" aria-label="Data view">
+        <option value="all">All data views</option>
+      </select>
+      <span id="journeys-filter-count" class="cja-status-line"></span>
+    </div>
 
     <div class="table-scroll">
 
@@ -46,6 +53,7 @@
         <thead>
           <tr>
             <th>Journey</th>
+            <th>Data view</th>
             <th>Requirement</th>
             <th>Stages</th>
             <th>KPIs</th>
@@ -56,6 +64,7 @@
         <tbody id="journeys-tbody">
           <tr data-journey-slug="ecommerce">
             <td>Ecommerce purchase journey</td>
+            <td>—</td>
             <td>Understand shop performance and drop-off</td>
             <td>4</td>
             <td>1</td>
@@ -64,6 +73,7 @@
           </tr>
           <tr data-journey-slug="login">
             <td>Customer login journey</td>
+            <td>—</td>
             <td>Understand monthly login frequency</td>
             <td>2</td>
             <td>1</td>
@@ -152,6 +162,7 @@
       </p>
 
       <p class="note">If a <code>component_key</code> already exists in another data file (e.g. synced from CJA and curated on the Components page), the journey <strong>references that component and keeps its curated context</strong>; the <code>component_*</code> columns in your CSV are ignored for it. Only new keys are defined by the journey.</p>
+      <p class="note">A journey is measured in one CJA data view. Put its ID (e.g. <code>dv_…</code>) in an optional <code>data_view</code> column. Without that column, the data view is taken from the CJA components the CSV reuses, if they all come from the same one. Import is refused if a reused component is not in the journey's data view.</p>
       <h3>Expected CSV format</h3>
       <pre class="code-block">journey_slug,journey_label,journey_owner,requirement_label,requirement_comment,kpi_label,kpi_formula,kpi_owner,kpi_target,kpi_comment,stage_key,stage_label,stage_order,rolls_up_to_kpi,component_key,component_label,component_type,component_definition,component_caveats,component_context,component_owner,component_xdm_path,filter_value,data_layer_variable,data_layer_source_system
 ecommerce,Ecommerce purchase journey,Digital Marketing,Understand shop performance and drop-off,"We want to understand how our shop is performing, and where in the journey people drop off.",Order conversion rate,Orders / Product Views,Ecommerce / Digital Marketing,0.0020,"Current value (2026): 0.11%. Target: 0.20% (illustrative example, not a real commitment).",product_view,Product view,1,no,product_views,Product views,metric,Number of times a product detail page was viewed.,"Counts page views, not unique visitors — a visitor viewing the same product twice counts twice.",Entry point for the purchase funnel; used to benchmark top-of-funnel demand.,Digital Analytics,commerce.productViews.value,,digitalData.conversion.conversionFunnel.step,Web data layer (digitalData)</pre>
@@ -171,7 +182,7 @@ martech:journey_ecommerce
     </div>
   </section>
 </main>
-<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running; see components.html for setup. Falls back to a static example otherwise.</footer>
+<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running; connect CJA on the Sources page. Falls back to a static example otherwise.</footer>
 </div>
 </div>
 
@@ -186,14 +197,70 @@ const CSV_COLUMNS = [
   "component_owner", "component_xdm_path", "filter_value",
   "data_layer_variable", "data_layer_source_system",
 ];
+// Read when present, not required.
+const OPTIONAL_CSV_COLUMNS = ["entry_criteria", "data_view"];
 
-function renderJourneysTable(journeys) {
+function renderJourneyFilter(journeys, dataViews) {
+  const select = document.getElementById("filter-journey-dataview");
+  const wanted = select.dataset.initialized
+    ? select.value
+    : (new URLSearchParams(location.search).get("dv") || "all");
+  select.dataset.initialized = "1";
+  select.innerHTML = "";
+  const add = (value, text) => {
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = text;
+    select.appendChild(opt);
+  };
+  add("all", "All data views (" + journeys.length + ")");
+  // Data views with synced components, plus any a journey names that no longer has any.
+  const ids = dataViews.map(d => d.id);
+  journeys.forEach(j => { if (j.data_view && !ids.includes(j.data_view)) ids.push(j.data_view); });
+  const nameOf = id => (dataViews.find(d => d.id === id) || {}).name || (journeys.find(j => j.data_view === id) || {}).data_view_name || "";
+  ids.forEach(id => {
+    const count = journeys.filter(j => j.data_view === id).length;
+    add(id, (nameOf(id) ? nameOf(id) + " (" + id + ")" : id) + " · " + count);
+  });
+  const unset = journeys.filter(j => !j.data_view).length;
+  if (unset) add("__none__", "No data view set · " + unset);
+  select.value = [...select.options].some(o => o.value === wanted) ? wanted : "all";
+  document.getElementById("journeys-toolbar").hidden = ids.length === 0;
+}
+
+function applyJourneyFilter() {
+  const dv = document.getElementById("filter-journey-dataview").value;
+  const rows = document.querySelectorAll("#journeys-tbody tr");
+  let shown = 0;
+  rows.forEach(tr => {
+    const own = tr.dataset.dataView || "";
+    const visible = dv === "all" || (dv === "__none__" ? !own : own === dv);
+    tr.hidden = !visible;
+    if (visible) shown++;
+  });
+  document.getElementById("journeys-filter-count").textContent = "Showing " + shown + " of " + rows.length;
+  document.getElementById("btn-new-journey").href =
+    "journey-edit.html" + (dv === "all" || dv === "__none__" ? "" : "?dv=" + encodeURIComponent(dv));
+}
+
+document.getElementById("filter-journey-dataview").addEventListener("change", () => {
+  const dv = document.getElementById("filter-journey-dataview").value;
+  const url = new URL(location.href);
+  if (dv === "all") url.searchParams.delete("dv"); else url.searchParams.set("dv", dv);
+  history.replaceState(null, "", url);
+  applyJourneyFilter();
+});
+
+function renderJourneysTable(journeys, dataViews) {
+  renderJourneyFilter(journeys, dataViews || []);
   const tbody = document.getElementById("journeys-tbody");
   tbody.innerHTML = "";
   journeys.forEach(j => {
     const tr = document.createElement("tr");
     tr.dataset.journeySlug = j.slug;
-    [j.label, j.requirement || "—", String(j.stages), String(j.kpis), j.last_generated].forEach(text => {
+    tr.dataset.dataView = j.data_view || "";
+    const dvText = j.data_view ? (j.data_view_name ? j.data_view_name + " (" + j.data_view + ")" : j.data_view) : "—";
+    [j.label, dvText, j.requirement || "—", String(j.stages), String(j.kpis), j.last_generated].forEach(text => {
       const td = document.createElement("td");
       td.textContent = text;
       tr.appendChild(td);
@@ -213,6 +280,7 @@ function renderJourneysTable(journeys) {
     tr.appendChild(actionTd);
     tbody.appendChild(tr);
   });
+  applyJourneyFilter();
 }
 
 function deleteJourney(slug, label) {
@@ -232,7 +300,7 @@ function loadLiveJourneys() {
   fetch("/api/state")
     .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
     .then(data => {
-      renderJourneysTable(data.journeys);
+      renderJourneysTable(data.journeys, data.data_views);
       note.textContent = "Live data: " + data.journeys.length + " journey file(s).";
     })
     .catch(() => {
@@ -445,7 +513,7 @@ function validateCsv(text) {
   const missing = CSV_COLUMNS.filter(c => !header.includes(c));
   if (missing.length) return { ok: false, message: "Missing column(s): " + missing.join(", ") };
   if (lines.length < 2) return { ok: false, message: "No data rows found below the header." };
-  const extra = header.filter(c => !CSV_COLUMNS.includes(c));
+  const extra = header.filter(c => !CSV_COLUMNS.includes(c) && !OPTIONAL_CSV_COLUMNS.includes(c));
   let message = "Looks valid: " + header.length + " column(s), " + (lines.length - 1) + " data row(s). Click Generate turtle to write it.";
   if (extra.length) message += " (unrecognized column(s), ignored: " + extra.join(", ") + ")";
   return { ok: true, message };

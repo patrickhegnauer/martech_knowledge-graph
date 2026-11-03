@@ -287,6 +287,7 @@ def create_app(data_dir: Path) -> Flask:
             "xdm_ref": xdm_refs[0] if xdm_refs else "",
             "owner": str(owner) if owner else "",
             "has_context": has_context,
+            "data_views": data_view_ids_of(refs),
         }
 
     def collect_state():
@@ -299,6 +300,17 @@ def create_app(data_dir: Path) -> Flask:
         components = [component_summary(merged, s) for s in merged.subjects(RDF.type, MARTECH.Component)]
         components.sort(key=lambda c: c["name"])
 
+        # For the data view filter on the Components page. Names come from the local cache only;
+        # /api/sources is what backfills them from CJA.
+        dv_counts = {}
+        for c in components:
+            for dv_id in c["data_views"]:
+                dv_counts[dv_id] = dv_counts.get(dv_id, 0) + 1
+        dv_names = load_data_view_names()
+        data_views = [{"id": dv_id, "name": dv_names.get(dv_id, ""), "component_count": count}
+                      for dv_id, count in dv_counts.items()]
+        data_views.sort(key=lambda d: (d["name"] or d["id"]).lower())
+
         journeys = []
         for path, g in file_graphs.items():
             for s in g.subjects(RDF.type, MARTECH.Journey):
@@ -309,7 +321,10 @@ def create_app(data_dir: Path) -> Flask:
                 req_label = merged.value(req, RDFS.label) if req is not None else None
                 requirement = str(req_label) if req_label is not None else ""
                 mtime = datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d")
+                journey_dv = str(g.value(s, MARTECH.data_view) or "")
                 journeys.append({
+                    "data_view": journey_dv,
+                    "data_view_name": dv_names.get(journey_dv, ""),
                     "slug": path.name.replace("-instances.ttl", ""),
                     "label": label,
                     "requirement": requirement,
@@ -323,6 +338,7 @@ def create_app(data_dir: Path) -> Flask:
             "version": __version__,
             "mode": state["mode"],
             "components": components,
+            "data_views": data_views,
             "journeys": journeys,
             "triple_count": len(merged),
         }
@@ -496,6 +512,36 @@ def create_app(data_dir: Path) -> Flask:
                 if dv_id not in ids:
                     ids.append(dv_id)
         return ids
+
+    # A journey is measured in one data view: every CJA component of its stages must come from it.
+    # Components without a urn:cja: ref (defined by a journey) fit any data view.
+
+    def component_data_view_map():
+        """{component key: [data view ids]} for every component in the workspace."""
+        merged = merged_instances()
+        return {component_key_from_subject(s): data_view_ids_of(str(r) for r in merged.objects(s, MARTECH.refs))
+                for s in merged.subjects(RDF.type, MARTECH.Component)}
+
+    def data_view_display(dv_id):
+        name = load_data_view_names().get(dv_id)
+        return f"{name} ({dv_id})" if name else dv_id
+
+    def common_data_views(comp_keys, dv_map):
+        """Data views every CJA component in comp_keys comes from (empty if they share none or none is
+        from CJA)."""
+        sets = [set(dv_map[k]) for k in comp_keys if dv_map.get(k)]
+        return set.intersection(*sets) if sets else set()
+
+    def data_view_problems(data_view, comp_keys, dv_map, what):
+        """Problems with measuring the components in comp_keys in data_view. A data view is required as
+        soon as any data view has been synced into the workspace."""
+        known = set().union(*dv_map.values()) if dv_map else set()
+        if not data_view:
+            return [f"Pick the data view {what} is measured in"] if known else []
+        if data_view not in known:
+            return [f"No components have been synced from data view {data_view_display(data_view)}"]
+        return [f"Component '{k}' is not in data view {data_view_display(data_view)}"
+                for k in sorted(set(comp_keys)) if dv_map.get(k) and data_view not in dv_map[k]]
 
     @app.route("/api/cja/config", methods=["GET"])
     def api_get_cja_config():
@@ -692,14 +738,29 @@ def create_app(data_dir: Path) -> Flask:
             if not slug:
                 raise ValueError("journey_slug is required in the first row")
 
+            used = {r["component_key"].strip() for r in rows}
+            dv_map = component_data_view_map()
+            data_view = (rows[0].get("data_view") or "").strip()
+            if not data_view:
+                # Without a data_view column, take the one data view all reused CJA components share.
+                common = common_data_views(used, dv_map)
+                if len(common) == 1:
+                    data_view = next(iter(common))
+            problems = data_view_problems(data_view, used, dv_map, "this journey")
+            if problems and not data_view:
+                problems = ["Can't tell from its components which data view this journey is measured in "
+                            "(they don't all come from exactly one). Add a data_view column with the data view's ID"]
+            if problems:
+                raise ValueError("; ".join(problems))
+
             with NamedTemporaryFile("w", suffix=".csv", delete=False, newline="", encoding="utf-8") as tmp:
                 tmp.write(csv_text)
                 tmp_path = tmp.name
             existing = existing_component_map(current_dir() / f"{slug}-instances.ttl")
             turtle_text = jb.build_journey_from_csv(
-                tmp_path, xdm_base_url=load_settings()["xdm_base_url"], existing_components=existing
+                tmp_path, xdm_base_url=load_settings()["xdm_base_url"], existing_components=existing,
+                data_view=data_view or None,
             )
-            used = {r["component_key"].strip() for r in rows}
             reused = sorted(used & existing.keys())
         except Exception as exc:
             return jsonify({"error": str(exc)}), 400
@@ -729,6 +790,7 @@ def create_app(data_dir: Path) -> Flask:
             "data_layer_variable": spec.data_layer_variable or "",
             "requirement_id": lib.id_from_uri(spec.requirement_uri or ""),
             "kpi_id": lib.id_from_uri(spec.kpi_uri or ""),
+            "data_view": spec.data_view or "",
         }
 
     def library_file():
@@ -829,7 +891,12 @@ def create_app(data_dir: Path) -> Flask:
         if spec is None:
             return jsonify({"error": f"This journey can't be edited in the form: it {reason}. "
                                      "Edit its file or regenerate it from a CSV."}), 409
-        return jsonify(spec_to_json(spec))
+        result = spec_to_json(spec)
+        # Journeys saved before they stored a data view: suggest the one all their CJA components share.
+        common = set() if spec.data_view else common_data_views(
+            {st.component_key for st in spec.stages}, component_data_view_map())
+        result["data_view_suggested"] = next(iter(common)) if len(common) == 1 else ""
+        return jsonify(result)
 
     @app.route("/api/journeys/<slug>", methods=["DELETE"])
     def api_delete_journey(slug):
@@ -893,6 +960,11 @@ def create_app(data_dir: Path) -> Flask:
         available = existing_component_map(out_path)
         available_keys = set(available) | {c.key for c in own_components}
 
+        data_view = (body.get("data_view") or "").strip()
+        dv_map = component_data_view_map()
+        dv_problems = data_view_problems(data_view, [], dv_map, "this journey")
+        problems += dv_problems
+
         stages, used_keys = [], set()
         for i, row in enumerate(body.get("stages") or [], start=1):
             label = (row.get("label") or "").strip()
@@ -903,7 +975,11 @@ def create_app(data_dir: Path) -> Flask:
             if comp_key not in available_keys:
                 problems.append(f"Stage {i} ('{label}'): pick a component from the list")
                 continue
-            key = (row.get("key") or "").strip() or jb.slugify(label, "stage")
+            if data_view and not dv_problems and dv_map.get(comp_key) and data_view not in dv_map[comp_key]:
+                problems.append(f"Stage {i} ('{label}'): its component is not in data view "
+                                f"{data_view_display(data_view)}; pick one from that data view")
+                continue
+            key =(row.get("key") or "").strip() or jb.slugify(label, "stage")
             base, n = key, 2
             while key in used_keys:
                 key, n = f"{base}_{n}", n + 1
@@ -967,7 +1043,7 @@ def create_app(data_dir: Path) -> Flask:
             kpi_label=kpi_label, kpi_formula=kpi_formula, kpi_owner=kpi_owner, kpi_target=kpi_target,
             kpi_comment=(body.get("kpi_comment") or "").strip() or None,
             components=own_components, stages=stages, data_layer_variable=dlv, data_layer_source_system=dlv_source,
-            requirement_uri=shared_uris["requirement"], kpi_uri=shared_uris["kpi"],
+            requirement_uri=shared_uris["requirement"], kpi_uri=shared_uris["kpi"], data_view=data_view or None,
         )
         turtle_text = jb.build_journey_turtle(
             spec, xdm_base_url=load_settings()["xdm_base_url"], existing_components=available,
@@ -1102,7 +1178,20 @@ def create_app(data_dir: Path) -> Flask:
     @app.route("/api/graph-data", methods=["GET"])
     def api_graph_data():
         g = ge.load_graph(ontology_path=ONTOLOGY_FILE, script_dir=current_dir())
-        return jsonify(ge.extract_full_graph(g))
+        data = ge.extract_full_graph(g)
+        # For the data view filter: each component's data views (from its urn:cja: refs; a node's
+        # properties keep only one ref), and the data views with their names.
+        counts = {}
+        for node in data["nodes"]:
+            if node["group"] == "Component":
+                node["data_views"] = data_view_ids_of(str(r) for r in g.objects(rdflib.URIRef(node["id"]), MARTECH.refs))
+                for dv_id in node["data_views"]:
+                    counts[dv_id] = counts.get(dv_id, 0) + 1
+        names = load_data_view_names()
+        data["data_views"] = sorted(
+            ({"id": dv_id, "name": names.get(dv_id, ""), "component_count": n} for dv_id, n in counts.items()),
+            key=lambda d: (d["name"] or d["id"]).lower())
+        return jsonify(data)
 
     @app.route("/api/ttl-bundle", methods=["GET"])
     def api_ttl_bundle():

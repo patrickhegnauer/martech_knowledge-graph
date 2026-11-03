@@ -121,6 +121,11 @@ martech:entry_criteria a rdf:Property ;
     rdfs:range xsd:string ;
     rdfs:comment "What defines that a user has entered this stage." .
 
+martech:data_view a rdf:Property ;
+    rdfs:domain martech:Journey ;
+    rdfs:range xsd:string ;
+    rdfs:comment "ID of the CJA data view the journey is measured in (e.g. dv_...). Every CJA component of the journey's stages comes from this data view; it is the same ID as in the components' urn:cja:<dataViewId>:<componentId> refs." .
+
 martech:definition a rdf:Property ;
     rdfs:domain martech:Component ;
     rdfs:range xsd:string ;

@@ -50,6 +50,12 @@
       <label for="field-owner">Owner</label>
       <input type="text" id="field-owner" autocomplete="off">
 
+      <div id="dataview-field" hidden>
+        <label for="select-dataview">Data view</label>
+        <select id="select-dataview"></select>
+        <p class="note" id="note-dataview"></p>
+      </div>
+
       <h3>Requirement</h3>
       <div>
         <label for="select-req">Requirement</label>
@@ -94,7 +100,7 @@
         </table>
       </div>
       <datalist id="components-list"></datalist>
-      <p class="note note-error" id="components-empty" style="display:none;">No components yet. <a href="components.html">Sync them from CJA</a> first.</p>
+      <p class="note note-error" id="components-empty" style="display:none;">No components yet. <a href="sources.html">Sync them from CJA</a> first.</p>
       <button type="button" id="btn-add-stage" class="secondary">Add stage</button>
 
       <h3>Journey shape</h3>
@@ -124,6 +130,8 @@ const $ = id => document.getElementById(id);
 const componentByLabel = {};   // datalist text -> component key
 const labelByKey = {};         // component key -> datalist text
 const componentTypeByKey = {}; // component key -> "metric" | "dimension", for the journey diagram's pills
+const dataViewsByKey = {};     // component key -> CJA data view ids it comes from ([] if not from CJA)
+let componentOrder = [];       // component keys in datalist order
 let slugTouched = false;
 let savedAsExisting = false;   // once a new journey is saved, later saves edit that file
 
@@ -383,14 +391,62 @@ function resolveComponent(text) {
   return labelByKey[t] ? t : "";   // a bare component key is also accepted
 }
 
+// The journey is measured in one data view, so only its components are offered. Components that are not
+// from CJA (no data view) fit any data view; shared standard ones (Visits, Day, ...) carry every data view.
+function componentFits(key) {
+  const dv = $("select-dataview").value;
+  const dvs = dataViewsByKey[key] || [];
+  return !dv || !dvs.length || dvs.includes(dv);
+}
+
+function rebuildComponentList() {
+  const list = $("components-list");
+  list.innerHTML = "";
+  componentOrder.filter(componentFits).forEach(key => {
+    const opt = document.createElement("option");
+    opt.value = labelByKey[key];
+    list.appendChild(opt);
+  });
+  markStageRows();
+}
+
+// "" if the row is fine, else why not. Marks the component input red for a problem.
+function stageProblem(tr) {
+  const input = tr.querySelector(".stage-component");
+  const text = input.value.trim();
+  const key = resolveComponent(text);
+  const problem = text && !key ? "unknown" : key && !componentFits(key) ? "dataview" : "";
+  input.style.borderColor = problem ? "#d64545" : "";
+  input.title = problem === "dataview" ? "Not in the selected data view" : "";
+  return problem;
+}
+
+function markStageRows() {
+  Array.from($("stages-tbody").children).forEach(stageProblem);
+}
+
+function dataViewLabel(dv) {
+  return dv.name ? dv.name + " (" + dv.id + ")" : dv.id;
+}
+
+function setDataView(value, note) {
+  const sel = $("select-dataview");
+  if (value && !Array.from(sel.options).some(o => o.value === value)) {
+    addOption(sel, value, value + " (no synced components)");
+  }
+  sel.value = value || "";
+  $("note-dataview").textContent = note || "Every CJA component of the stages must come from this data view. " +
+    "Standard components such as Visits or Day, and components that are not from CJA, fit any data view.";
+  rebuildComponentList();
+}
+
 function collectSpec() {
-  const bad = [];
+  const bad = [], wrongDataView = [];
   const stages = Array.from($("stages-tbody").children).map((tr, i) => {
-    const text = tr.querySelector(".stage-component").value;
-    const key = resolveComponent(text);
-    const input = tr.querySelector(".stage-component");
-    input.style.borderColor = key || !text.trim() ? "" : "#d64545";
-    if (text.trim() && !key) bad.push(i + 1);
+    const key = resolveComponent(tr.querySelector(".stage-component").value);
+    const problem = stageProblem(tr);
+    if (problem === "unknown") bad.push(i + 1);
+    if (problem === "dataview") wrongDataView.push(i + 1);
     return {
       key: tr.dataset.key || "",
       label: tr.querySelector(".stage-label").value,
@@ -406,6 +462,7 @@ function collectSpec() {
       slug: $("field-slug").value.trim(),
       journey_label: $("field-label").value,
       journey_owner: $("field-owner").value,
+      data_view: $("select-dataview").value,
       requirement_label: $("field-req-label").value,
       requirement_comment: $("field-req-comment").value,
       kpi_label: $("field-kpi-label").value,
@@ -422,6 +479,7 @@ function collectSpec() {
       update_kpi: picker.kpi.update,
     },
     badRows: bad,
+    wrongDataViewRows: wrongDataView,
   };
 }
 
@@ -448,7 +506,8 @@ $("field-label").addEventListener("input", () => {
 $("field-slug").addEventListener("input", () => { slugTouched = true; });
 $("btn-add-stage").addEventListener("click", () => addStageRow());
 $("stages-tbody").addEventListener("input", renderJourneyDiagram);
-$("stages-tbody").addEventListener("change", renderJourneyDiagram);
+$("stages-tbody").addEventListener("change", () => { renderJourneyDiagram(); markStageRows(); });
+$("select-dataview").addEventListener("change", () => setDataView($("select-dataview").value));
 $("select-req").addEventListener("change", () => { picker.requirement.value = $("select-req").value; onPickerChange("requirement"); });
 $("select-kpi").addEventListener("change", () => { picker.kpi.value = $("select-kpi").value; onPickerChange("kpi"); });
 $("btn-unlock-req").addEventListener("click", () => { picker.requirement.update = true; lockFields("requirement", false); renderPickerNote("requirement"); });
@@ -456,9 +515,17 @@ $("btn-unlock-kpi").addEventListener("click", () => { picker.kpi.update = true; 
 $("form-journey").addEventListener("submit", ev => ev.preventDefault());
 
 $("btn-save-journey").addEventListener("click", () => {
-  const { spec, badRows } = collectSpec();
+  const { spec, badRows, wrongDataViewRows } = collectSpec();
   if (badRows.length) {
     showStatus("Stage " + badRows.join(", ") + ": pick a component from the list.", true);
+    return;
+  }
+  if (!$("dataview-field").hidden && !spec.data_view) {
+    showStatus("Pick the data view this journey is measured in.", true);
+    return;
+  }
+  if (wrongDataViewRows.length) {
+    showStatus("Stage " + wrongDataViewRows.join(", ") + ": the component is not in the selected data view. Pick one from that data view.", true);
     return;
   }
   showStatus("Saving…", false);
@@ -491,19 +558,29 @@ fetch("/api/state")
   .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
   .then(data => {
     $("live-mode-note").textContent = "Live data.";
-    const list = $("components-list");
     data.components.forEach(c => {
       let text = c.name + " · " + (c.cja_id || c.key);
       if (componentByLabel[text]) text += " [" + c.key + "]";
       componentByLabel[text] = c.key;
       labelByKey[c.key] = text;
       componentTypeByKey[c.key] = c.type;
-      const opt = document.createElement("option");
-      opt.value = text;
-      list.appendChild(opt);
+      dataViewsByKey[c.key] = c.data_views || [];
+      componentOrder.push(c.key);
     });
     $("components-empty").style.display = data.components.length ? "none" : "block";
-    if (!editing) { addStageRow(); addStageRow(); return; }
+
+    // Data view: required once any data view is synced. A new journey starts from ?dv= or the only one.
+    const dataViews = data.data_views || [];
+    const dvSelect = $("select-dataview");
+    $("dataview-field").hidden = dataViews.length === 0;
+    addOption(dvSelect, "", "Pick a data view…");
+    dataViews.forEach(dv => addOption(dvSelect, dv.id, dataViewLabel(dv)));
+    if (!editing) {
+      const wanted = new URLSearchParams(location.search).get("dv");
+      setDataView(dataViews.some(d => d.id === wanted) ? wanted : dataViews.length === 1 ? dataViews[0].id : "");
+      addStageRow(); addStageRow();
+      return;
+    }
     $("page-title").textContent = "Edit Journey";
     $("field-slug").readOnly = true;
     return fetch("/api/journeys/" + encodeURIComponent(slugParam))
@@ -511,6 +588,13 @@ fetch("/api/state")
       .then(spec => {
         $("page-title").textContent = "Edit Journey: " + spec.journey_label;
         fillForm(spec);
+        if (spec.data_view || !dataViews.length) {
+          setDataView(spec.data_view);
+        } else if (spec.data_view_suggested) {
+          setDataView(spec.data_view_suggested, "Not stored with this journey yet: filled in from its components, all of which come from this data view. Saving stores it.");
+        } else {
+          setDataView("", "Not stored with this journey yet, and its components don't all come from one data view. Pick the data view it is measured in, then fix the stages marked red.");
+        }
         if (spec.data_layer_variable) {
           $("slug-note").textContent = "This journey has its own data layer variable (" + spec.data_layer_variable + "), kept as is.";
         }

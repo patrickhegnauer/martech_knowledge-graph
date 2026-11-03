@@ -260,7 +260,8 @@ message rather than silently writing into the bundled example data.
 
 ## Connecting to CJA
 
-Components → **Sync from CJA**. You need an Adobe Developer Console project with an **OAuth
+Sources → **Connect to CJA** (once connected, the button reads **Sync a data view**, and each synced data
+view gets a **Re-sync** button). You need an Adobe Developer Console project with an **OAuth
 Server-to-Server** credential and the Customer Journey Analytics API, on a product profile that can see
 your data views. Enter client ID, client secret, org ID (`...@AdobeOrg`) and scopes (default
 `openid,AdobeID,read_organizations,additional_info.projectedProductContext`). The app first requests a real
@@ -303,6 +304,19 @@ Every component (from a CJA sync or from a journey) is edited from its **Edit** 
 The Components table has search (name, CJA ID, XDM path, data layer variable, owner) and a filter for context
 status and metric/dimension, and shows the CJA ID, XDM path and data layer variable of every component.
 
+With more than one data view synced, a **data view** filter narrows the table to one data view. Standard
+components appear under every data view that uses them, and components that don't come from CJA are listed
+under "Not from CJA". Context coverage follows the selected data view. The choice is kept in the URL
+(`components.html?dv=<id>`); the Sources page links each data view's component count there.
+
+## Browsing the graph
+
+The Graph page draws the whole graph with vis-network: filter by class, pick a journey to highlight
+everything it connects to, and click a node to see its properties. With data views synced, a **data view**
+filter redraws the graph with only that data view's components, the journeys measured in it (with their
+stages, KPIs and requirements), and the data layer variables feeding those components. Journeys without a
+data view stored only show under "All data views".
+
 ## Adding a new journey
 
 You don't need to hand-write turtle. Four ways in:
@@ -316,6 +330,15 @@ KPI** on the stage(s) that feed the KPI. Existing journeys have an **Edit** link
 rename, add or remove stages and save (the journey's file is rewritten from the form). Journeys that contain
 things the form can't preserve (e.g. an unknown property or several journeys in one file) are refused with a clear
 message instead of being changed. Data layer variables are maintained per component, not in this form.
+
+**Data view:** a journey is measured in one CJA data view, picked at the top of the form and stored with the
+journey (`martech:data_view`). The component list then only offers that data view's components (plus the
+standard ones such as Visits or Day, and components that aren't from CJA), and saving refuses a stage whose
+component comes from another data view. This matters because custom components are kept per data view: an
+"Orders" metric from one data view can mean something else in another. Once any data view has been synced,
+the field is required. A journey saved before this gets its data view filled in from its components when they
+all come from one; otherwise you pick it and fix the stages marked red. In a CSV import, put the ID in an
+optional `data_view` column. The Journeys page shows each journey's data view and can filter by it.
 
 ### Shared requirements and KPIs (library)
 
@@ -348,7 +371,9 @@ directory.
 **CSV, scripted**: one row per stage; Journey/Requirement/KPI/data-layer columns repeat the same
 value on every row; each unique `component_key` only needs its definition/caveats/context filled in once
 even if several stages share it. `journey_builder.write_csv_template(path)` writes an empty template with
-the right headers to start from. Then:
+the right headers to start from. Put the journey's CJA data view ID in the optional `data_view` column
+(see **Data view** above); the web UI's CSV import requires it once data views are synced, unless all reused
+CJA components come from one data view. Then:
 ```python
 from martech_knowledge_graph.journey_builder import build_journey_from_csv
 
@@ -421,6 +446,9 @@ thing as an `xdm_base_url` argument.
 - ✅ Ontology trimmed to what's actually populated: removed `Feature`/`StageTransition` and their
   properties (declared but never instantiated by anything, including the bundled demo data), and wired up
   `entry_criteria` on `Stage` (was declared but unused) with a real form field.
+- ✅ Several data views side by side: CJA connect and sync live on the Sources page (with a Re-sync per data
+  view); the Components, Journeys and Graph pages filter by data view; and each journey stores the data
+  view it is measured in (`martech:data_view`), with saving refusing components from another data view.
 
 ## License
 

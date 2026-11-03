@@ -65,6 +65,7 @@ class JourneySpec:
     data_layer_source_system: str = "Web data layer (digitalData)"
     requirement_uri: str = None  # set when the requirement is a shared library entry
     kpi_uri: str = None          # set when the KPI is a shared library entry
+    data_view: str = None        # CJA data view id the journey is measured in (e.g. "dv_...")
 
 
 def _esc(s):
@@ -148,6 +149,8 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
     ]
     if spec.journey_owner:
         journey_lines.append(f'    martech:owner "{_esc(spec.journey_owner)}" ;')
+    if spec.data_view:
+        journey_lines.append(f'    martech:data_view "{_esc(spec.data_view)}" ;')
     journey_lines.append(
         "    martech:has_stage " + ", ".join(f"data:stage_{s.key}" for s in spec.stages) + " ."
     )
@@ -238,7 +241,7 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
 _ROUND_TRIP_PREDICATES = {
     "type", "label", "comment", "status", "addressed_by", "formula", "owner", "target", "has_stage", "order",
     "rolls_up_to", "component_type", "definition", "caveats", "context", "refs", "maps_to", "source_system",
-    "measured_entity", "measured_component", "filter_value", "entry_criteria",
+    "measured_entity", "measured_component", "filter_value", "entry_criteria", "data_view",
 }
 _ROUND_TRIP_TYPES = {"Requirement", "KPI", "Journey", "Stage", "Component", "DataLayerVariable", "Measurement"}
 
@@ -346,6 +349,7 @@ def journey_from_graph(g, slug, library=None):
         data_layer_source_system=(text(dlvs[0], M.source_system) if dlvs else "") or "Web data layer (digitalData)",
         requirement_uri=str(req) if str(req).startswith(LIBRARY_NS) else None,
         kpi_uri=str(kpi) if str(kpi).startswith(LIBRARY_NS) else None,
+        data_view=text(journey, M.data_view) or None,
     )
     return spec, None
 
@@ -360,7 +364,8 @@ import csv
 
 
 def build_journey_from_csv(csv_path: str, xdm_base_url: str = DEFAULT_XDM_BASE_URL,
-                           existing_components: dict = None) -> str:
+                           existing_components: dict = None, data_view: str = None) -> str:
+    """data_view, when given, overrides the CSV's optional data_view column."""
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     if not rows:
@@ -418,6 +423,7 @@ def build_journey_from_csv(csv_path: str, xdm_base_url: str = DEFAULT_XDM_BASE_U
         stages=stages,
         data_layer_variable=first.get("data_layer_variable", "").strip() or None,
         data_layer_source_system=first.get("data_layer_source_system", "").strip() or "Web data layer (digitalData)",
+        data_view=data_view or (first.get("data_view") or "").strip() or None,
     )
     return build_journey_turtle(spec, xdm_base_url=xdm_base_url, existing_components=existing_components)
 
@@ -430,7 +436,7 @@ CSV_COLUMNS = [
     "component_key", "component_label", "component_type",
     "component_definition", "component_caveats", "component_context",
     "component_owner", "component_xdm_path", "filter_value", "entry_criteria",
-    "data_layer_variable", "data_layer_source_system",
+    "data_layer_variable", "data_layer_source_system", "data_view",
 ]
 
 

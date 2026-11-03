@@ -44,6 +44,12 @@
       </div>
       <div class="col-side">
         <div class="panel">
+          <div id="dataview-filter" hidden>
+            <h3>Data view</h3>
+            <select id="select-dataview" aria-label="Data view"></select>
+            <p class="note">Shows that data view's components, the journeys measured in it, and what they connect to.</p>
+          </div>
+
           <h3>Classes</h3>
           <div class="checkbox-list" id="class-filters">
             <label><input type="checkbox" name="class-filter" value="Requirement" checked> Requirement</label>
@@ -95,42 +101,45 @@ const GROUP_COLORS = {
   Component: "#7F77DD", DataLayerVariable: "#ED93B1", Measurement: "#B4B2A9"
 };
 
-function populateJourneySelect(data) {
+function populateJourneySelect(nodes) {
   const select = document.getElementById("select-journey");
+  const current = select.value;
   select.innerHTML = '<option value="">(none, show all)</option>';
-  data.nodes.filter(n => n.group === "Journey").forEach(n => {
+  nodes.filter(n => n.group === "Journey").forEach(n => {
     const opt = document.createElement("option");
     opt.value = n.id;
     opt.textContent = n.label;
     select.appendChild(opt);
   });
+  select.value = Array.from(select.options).some(o => o.value === current) ? current : "";
+}
+
+function populateDataViewSelect(dataViews) {
+  const select = document.getElementById("select-dataview");
+  const add = (value, text) => {
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = text;
+    select.appendChild(opt);
+  };
+  add("all", "All data views");
+  dataViews.forEach(dv => add(dv.id, (dv.name ? dv.name + " (" + dv.id + ")" : dv.id) + " · " + dv.component_count));
+  const wanted = new URLSearchParams(location.search).get("dv");
+  select.value = dataViews.some(d => d.id === wanted) ? wanted : "all";
+  document.getElementById("dataview-filter").hidden = dataViews.length === 0;
 }
 
 function initGraph(data) {
-  populateJourneySelect(data);
+  populateDataViewSelect(data.data_views || []);
 
   const dataById = {};
   data.nodes.forEach(n => { dataById[n.id] = n; });
 
-  const visNodes = new vis.DataSet(data.nodes.map(n => ({
-    id: n.id,
-    label: n.label,
-    title: n.group,
-    color: { background: GROUP_COLORS[n.group] || "#B4B2A9", border: "#ffffff" },
-    shape: n.group === "Measurement" ? "diamond" : "box",
-    font: { size: 12, color: "#1a1a18" },
-  })));
+  // The nodes and edges currently drawn: everything, or the selected data view's part of the graph.
+  let current = { nodes: data.nodes, edges: data.edges };
 
-  const visEdges = new vis.DataSet(data.edges.map((e, i) => ({
-    id: i,
-    from: e.from,
-    to: e.to,
-    arrows: "to",
-    title: e.label,
-    color: { color: "#c4c2b8" },
-    width: 1,
-  })));
-
+  const visNodes = new vis.DataSet();
+  const visEdges = new vis.DataSet();
   const network = new vis.Network(
     document.getElementById("graph-canvas"),
     { nodes: visNodes, edges: visEdges },
@@ -140,26 +149,6 @@ function initGraph(data) {
       edges: { smooth: { type: "continuous" } },
     }
   );
-
-  network.once("stabilizationIterationsDone", () => {
-    network.setOptions({ physics: false });
-    network.fit({ animation: false });
-  });
-
-  // --- Class filter checkboxes: show/hide nodes by group (hiding a node
-  // also hides its connected edges). Reuses group values produced by
-  // graph_explorer.py extract_full_graph(). ---
-  function applyClassFilters() {
-    const checked = new Set();
-    document.querySelectorAll('#class-filters input[type="checkbox"]').forEach(cb => {
-      if (cb.checked) checked.add(cb.value);
-    });
-    visNodes.update(data.nodes.map(n => ({ id: n.id, hidden: !checked.has(n.group) })));
-  }
-  document.querySelectorAll('#class-filters input[type="checkbox"]').forEach(cb => {
-    cb.addEventListener("change", applyClassFilters);
-  });
-  applyClassFilters();
 
   // --- Journey explorer: walk journey -> has_stage -> stage, then
   // measured_entity/measured_component through each stage's Measurement
@@ -189,14 +178,82 @@ function initGraph(data) {
     return ids;
   }
 
-  document.getElementById("select-journey").addEventListener("change", ev => {
-    const journeyId = ev.target.value;
-    if (!journeyId) {
-      visNodes.update(data.nodes.map(n => ({ id: n.id, opacity: 1 })));
-      return;
-    }
-    const ids = journeyNodeIds(journeyId);
-    visNodes.update(data.nodes.map(n => ({ id: n.id, opacity: ids.has(n.id) ? 1 : 0.15 })));
+  // --- Data view filter: the data view's components (from their urn:cja: refs), the journeys stored with
+  // that data view and everything they connect to, and the data layer variables feeding those components.
+  // The graph is rebuilt rather than hidden: vis-network still lays out hidden nodes, so only rebuilding
+  // spreads out just what is shown. ---
+  function dataViewSubset(dv) {
+    if (dv === "all") return { nodes: data.nodes, edges: data.edges };
+    const ids = new Set();
+    data.nodes.forEach(n => {
+      if (n.group === "Component" && (n.data_views || []).includes(dv)) ids.add(n.id);
+      if (n.group === "Journey" && n.properties.data_view === dv) journeyNodeIds(n.id).forEach(id => ids.add(id));
+    });
+    data.edges.filter(e => e.label === "maps_to" && ids.has(e.to)).forEach(e => ids.add(e.from));
+    return {
+      nodes: data.nodes.filter(n => ids.has(n.id)),
+      edges: data.edges.filter(e => ids.has(e.from) && ids.has(e.to)),
+    };
+  }
+
+  function draw() {
+    current = dataViewSubset(document.getElementById("select-dataview").value);
+    visEdges.clear();
+    visNodes.clear();
+    visNodes.add(current.nodes.map(n => ({
+      id: n.id,
+      label: n.label,
+      title: n.group,
+      color: { background: GROUP_COLORS[n.group] || "#B4B2A9", border: "#ffffff" },
+      shape: n.group === "Measurement" ? "diamond" : "box",
+      font: { size: 12, color: "#1a1a18" },
+    })));
+    visEdges.add(current.edges.map((e, i) => ({
+      id: i,
+      from: e.from,
+      to: e.to,
+      arrows: "to",
+      title: e.label,
+      color: { color: "#c4c2b8" },
+      width: 1,
+    })));
+    populateJourneySelect(current.nodes);
+    applyClassFilters();
+    applyJourneyHighlight();
+    network.once("stabilizationIterationsDone", () => {
+      network.setOptions({ physics: false });
+      network.fit({ animation: false });
+    });
+    network.setOptions({ physics: true });
+    network.stabilize();
+  }
+
+  // --- Class filter checkboxes: show/hide nodes by group (hiding a node
+  // also hides its connected edges). Reuses group values produced by
+  // graph_explorer.py extract_full_graph(). ---
+  function applyClassFilters() {
+    const checked = new Set();
+    document.querySelectorAll('#class-filters input[type="checkbox"]').forEach(cb => {
+      if (cb.checked) checked.add(cb.value);
+    });
+    visNodes.update(current.nodes.map(n => ({ id: n.id, hidden: !checked.has(n.group) })));
+  }
+  document.querySelectorAll('#class-filters input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener("change", applyClassFilters);
+  });
+
+  function applyJourneyHighlight() {
+    const journeyId = document.getElementById("select-journey").value;
+    const ids = journeyId ? journeyNodeIds(journeyId) : null;
+    visNodes.update(current.nodes.map(n => ({ id: n.id, opacity: !ids || ids.has(n.id) ? 1 : 0.15 })));
+  }
+  document.getElementById("select-journey").addEventListener("change", applyJourneyHighlight);
+
+  document.getElementById("select-dataview").addEventListener("change", ev => {
+    const url = new URL(location.href);
+    if (ev.target.value === "all") url.searchParams.delete("dv"); else url.searchParams.set("dv", ev.target.value);
+    history.replaceState(null, "", url);
+    draw();
   });
 
   // --- Node detail panel ---
@@ -209,7 +266,9 @@ function initGraph(data) {
     document.getElementById("node-detail-group").textContent = n.group;
     const dl = document.getElementById("node-detail-props");
     dl.innerHTML = "";
-    Object.entries(n.properties).forEach(([key, val]) => {
+    const props = Object.assign({}, n.properties);
+    if ((n.data_views || []).length) props.data_views = n.data_views.join(", ");
+    Object.entries(props).forEach(([key, val]) => {
       const dt = document.createElement("dt");
       dt.textContent = key;
       const dd = document.createElement("dd");
@@ -217,12 +276,14 @@ function initGraph(data) {
       dl.appendChild(dt);
       dl.appendChild(dd);
     });
-    if (Object.keys(n.properties).length === 0) {
+    if (Object.keys(props).length === 0) {
       const dd = document.createElement("dd");
       dd.textContent = "(no literal properties)";
       dl.appendChild(dd);
     }
   });
+
+  draw();
 }
 
 fetch("/api/graph-data")

@@ -36,7 +36,7 @@
   <section>
     <h2>Components</h2>
     <p>Metrics and dimensions pulled from the CJA semantic layer, curated with business context here.</p>
-    <p class="note">Context is shared across data views for standard dimensions and metrics, such as Day, Month, Week, Visits and Visitors. These keep one entry, and each data view adds its reference to it, so you curate them once. Custom components are kept separately for each data view, because a metric such as Orders can mean different things in different data views.</p>
+    <p class="note">Context is shared across data views for standard dimensions and metrics, such as Day, Month, Week, Visits and Visitors. These keep one entry, and each data view adds its reference to it, so you curate them once, and they appear under every data view that uses them in the data view filter. Custom components are kept separately for each data view, because a metric such as Orders can mean different things in different data views.</p>
     <p class="note" id="live-mode-note">Checking for a local API…</p>
 
     <div class="counters">
@@ -47,8 +47,10 @@
     </div>
 
     <div class="toolbar">
-      <button type="button" id="btn-sync-cja" class="secondary">Sync from CJA</button>
-      <span id="cja-connection-status" class="cja-status-line">CJA: not connected</span>
+      <a class="btn secondary" href="sources.html">Sync from CJA on Sources →</a>
+      <select id="filter-dataview" aria-label="Data view" hidden>
+        <option value="all">All data views</option>
+      </select>
       <input type="text" id="search-components" placeholder="Search components…">
       <select id="filter-components">
         <option value="all">All</option>
@@ -138,61 +140,53 @@
   </section>
 </main>
 
-<div id="modal-cja-config" class="modal-overlay" hidden>
-  <div class="modal-box">
-    <div class="modal-header">
-      <h3>Connect to CJA</h3>
-      <button type="button" id="btn-cja-close" class="modal-close" aria-label="Close">&times;</button>
-    </div>
-
-    <div id="cja-step-config">
-      <p class="note">Credentials of an Adobe Developer Console project with an <strong>OAuth Server-to-Server</strong> credential and the Customer Journey Analytics API. They are saved on the machine running this server (<code>.mkg-cja.json</code> in your data directory), never in the browser and never in your graph files.</p>
-      <form id="form-cja-config" class="field-form" action="#">
-        <label for="cja-client-id">Client ID (API key)</label>
-        <input type="text" id="cja-client-id" name="client_id" autocomplete="off">
-
-        <label for="cja-client-secret">Client secret</label>
-        <input type="password" id="cja-client-secret" name="client_secret" autocomplete="off" placeholder="••••••••••••">
-
-        <label for="cja-org-id">Organization ID</label>
-        <input type="text" id="cja-org-id" name="org_id" autocomplete="off" placeholder="e.g. 1A2B3C4D5E6F@AdobeOrg">
-
-        <label for="cja-scopes">Scopes (comma-separated)</label>
-        <input type="text" id="cja-scopes" name="scopes" autocomplete="off">
-
-        <p class="note note-error" id="cja-config-error" style="display:none;"></p>
-
-        <p>
-          <button type="button" id="btn-cja-connect">Save &amp; Connect</button>
-        </p>
-      </form>
-    </div>
-
-    <div id="cja-step-dataview" hidden>
-      <p class="cja-status-line connected">Connected: org <span id="cja-connected-org"></span></p>
-      <label for="cja-dataview-select">Data view to sync</label>
-      <select id="cja-dataview-select"></select>
-      <p>
-        <button type="button" id="btn-cja-sync">Sync metrics &amp; dimensions</button>
-        <button type="button" id="btn-cja-reconfigure" class="secondary">Reconfigure</button>
-        <button type="button" id="btn-cja-disconnect" class="secondary">Disconnect</button>
-      </p>
-      <p id="cja-sync-result" class="note" style="display:none;"></p>
-    </div>
-  </div>
-</div>
-
-<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`). Sync calls the real CJA API with your saved credentials and writes new components to components-instances.ttl; components you already have are never overwritten. Falls back to a static example table if the API isn't running.</footer>
+<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`). Components come in through the CJA sync on the Sources page. Falls back to a static example table if the API isn't running.</footer>
 </div>
 </div>
 
 <script>
-function renderComponentsTable(components) {
+// Value of the data view filter for components that came from no data view (e.g. created by a journey).
+const NO_DATA_VIEW = "__none__";
+
+function renderDataviewFilter(dataViews, components) {
+  const select = document.getElementById("filter-dataview");
+  const wanted = select.dataset.initialized
+    ? select.value
+    : (new URLSearchParams(location.search).get("dv") || "all");
+  select.dataset.initialized = "1";
+  select.innerHTML = "";
+  const add = (value, text) => {
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = text;
+    select.appendChild(opt);
+  };
+  add("all", "All data views (" + components.length + ")");
+  dataViews.forEach(dv => {
+    const label = dv.name ? dv.name + " (" + dv.id + ")" : dv.id;
+    add(dv.id, label + " · " + dv.component_count);
+  });
+  const unsynced = components.filter(c => !(c.data_views || []).length).length;
+  if (unsynced) add(NO_DATA_VIEW, "Not from CJA · " + unsynced);
+  select.value = [...select.options].some(o => o.value === wanted) ? wanted : "all";
+  select.hidden = dataViews.length === 0;
+}
+
+function matchesDataview(tr) {
+  const dv = document.getElementById("filter-dataview").value;
+  if (dv === "all") return true;
+  const ids = (tr.dataset.dataViews || "").split(" ").filter(Boolean);
+  return dv === NO_DATA_VIEW ? ids.length === 0 : ids.includes(dv);
+}
+
+function renderComponentsTable(components, dataViews) {
+  renderDataviewFilter(dataViews || [], components);
   const tbody = document.querySelector("#table-components tbody");
   tbody.innerHTML = "";
   components.forEach(c => {
     const tr = document.createElement("tr");
     tr.dataset.componentId = c.key;
+    tr.dataset.dataViews = (c.data_views || []).join(" ");
     const nameTd = document.createElement("td");
     nameTd.className = "cell-wrap";
     nameTd.textContent = c.name;
@@ -246,23 +240,30 @@ function applyFilters() {
       (filter === "missing-context" && !hasContext) ||
       (filter === "metrics" && type === "metric") ||
       (filter === "dimensions" && type === "dimension");
-    const visible = matchesText && matchesFilter;
+    const visible = matchesText && matchesFilter && matchesDataview(tr);
     tr.hidden = !visible;
     if (visible) shown++;
   });
   document.getElementById("filter-count").textContent = "Showing " + shown + " of " + rows.length;
+  updateContextCoverage();
 }
 
 document.getElementById("search-components").addEventListener("input", applyFilters);
 document.getElementById("filter-components").addEventListener("change", applyFilters);
+document.getElementById("filter-dataview").addEventListener("change", () => {
+  const dv = document.getElementById("filter-dataview").value;
+  const url = new URL(location.href);
+  if (dv === "all") url.searchParams.delete("dv"); else url.searchParams.set("dv", dv);
+  history.replaceState(null, "", url);
+  applyFilters();
+});
 
 function loadLiveState() {
   const note = document.getElementById("live-mode-note");
   return fetch("/api/state")
     .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
     .then(data => {
-      renderComponentsTable(data.components);
-      updateContextCoverage();
+      renderComponentsTable(data.components, data.data_views);
       note.textContent = "Live data: " + data.triple_count + " triples across " + data.journeys.length + " journey file(s).";
       return true;
     })
@@ -273,8 +274,9 @@ function loadLiveState() {
     });
 }
 
+// Coverage of the selected data view, independent of the search box and the type filter.
 function updateContextCoverage() {
-  const rows = document.querySelectorAll("#table-components tbody tr");
+  const rows = [...document.querySelectorAll("#table-components tbody tr")].filter(matchesDataview);
   const total = rows.length;
   let withContext = 0;
   rows.forEach(tr => { if (tr.querySelector(".badge-has-context")) withContext++; });
@@ -283,143 +285,6 @@ function updateContextCoverage() {
     pct + "% (" + withContext + " of " + total + ")";
 }
 
-const modal = document.getElementById("modal-cja-config");
-const stepConfig = document.getElementById("cja-step-config");
-const stepDataview = document.getElementById("cja-step-dataview");
-const errorEl = document.getElementById("cja-config-error");
-const resultEl = document.getElementById("cja-sync-result");
-let cjaConfig = { configured: false };
-
-function api(path, options) {
-  return fetch(path, options).then(r =>
-    r.json().catch(() => ({})).then(data => {
-      if (!r.ok) throw new Error(data.error || ("request failed (" + r.status + ")"));
-      return data;
-    })
-  );
-}
-
-function refreshToolbarStatus() {
-  const el = document.getElementById("cja-connection-status");
-  if (cjaConfig.configured) {
-    el.textContent = "CJA: configured, org " + cjaConfig.org_id;
-    el.classList.add("connected");
-  } else {
-    el.textContent = "CJA: not connected";
-    el.classList.remove("connected");
-  }
-}
-
-function loadCjaConfig() {
-  return api("/api/cja/config").then(cfg => { cjaConfig = cfg; refreshToolbarStatus(); return cfg; })
-    .catch(() => { cjaConfig = { configured: false }; refreshToolbarStatus(); return cjaConfig; });
-}
-
-function showConfigStep() {
-  stepConfig.hidden = false;
-  stepDataview.hidden = true;
-  document.getElementById("cja-client-id").value = cjaConfig.client_id || "";
-  document.getElementById("cja-org-id").value = cjaConfig.org_id || "";
-  document.getElementById("cja-scopes").value = cjaConfig.scopes || "";
-  document.getElementById("cja-client-secret").value = "";
-  document.getElementById("cja-client-secret").placeholder = cjaConfig.configured ? "(saved, leave empty to keep)" : "••••••••••••";
-  errorEl.style.display = "none";
-}
-
-function showDataviewStep() {
-  stepConfig.hidden = true;
-  stepDataview.hidden = false;
-  document.getElementById("cja-connected-org").textContent = cjaConfig.org_id;
-  resultEl.style.display = "none";
-  const select = document.getElementById("cja-dataview-select");
-  select.innerHTML = "";
-  select.disabled = true;
-  resultEl.textContent = "Loading data views…";
-  resultEl.style.display = "block";
-  api("/api/cja/dataviews")
-    .then(data => {
-      data.data_views.forEach(dv => {
-        const opt = document.createElement("option");
-        opt.value = dv.id;
-        opt.textContent = dv.name === dv.id ? dv.id : dv.name + " (" + dv.id + ")";
-        select.appendChild(opt);
-      });
-      select.disabled = data.data_views.length === 0;
-      resultEl.textContent = data.data_views.length ? "" : "No data views are visible to this credential. Check its product profile.";
-      resultEl.style.display = data.data_views.length ? "none" : "block";
-    })
-    .catch(err => { resultEl.textContent = "Could not load data views: " + err.message; });
-}
-
-document.getElementById("btn-sync-cja").addEventListener("click", () => {
-  modal.hidden = false;
-  loadCjaConfig().then(cfg => { if (cfg.configured) showDataviewStep(); else showConfigStep(); });
-});
-
-document.getElementById("btn-cja-close").addEventListener("click", () => { modal.hidden = true; });
-modal.addEventListener("click", ev => { if (ev.target === modal) modal.hidden = true; });
-document.getElementById("form-cja-config").addEventListener("submit", ev => ev.preventDefault());
-
-document.getElementById("btn-cja-connect").addEventListener("click", () => {
-  const button = document.getElementById("btn-cja-connect");
-  errorEl.style.display = "none";
-  button.disabled = true;
-  button.textContent = "Connecting…";
-  api("/api/cja/config", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_id: document.getElementById("cja-client-id").value,
-      client_secret: document.getElementById("cja-client-secret").value,
-      org_id: document.getElementById("cja-org-id").value,
-      scopes: document.getElementById("cja-scopes").value,
-    }),
-  })
-    .then(() => loadCjaConfig())
-    .then(() => showDataviewStep())
-    .catch(err => { errorEl.textContent = err.message; errorEl.style.display = "block"; })
-    .finally(() => { button.disabled = false; button.textContent = "Save & Connect"; });
-});
-
-document.getElementById("btn-cja-reconfigure").addEventListener("click", showConfigStep);
-
-document.getElementById("btn-cja-disconnect").addEventListener("click", () => {
-  api("/api/cja/config", { method: "DELETE" })
-    .then(() => loadCjaConfig())
-    .then(() => { modal.hidden = true; })
-    .catch(err => { resultEl.textContent = err.message; resultEl.style.display = "block"; });
-});
-
-document.getElementById("btn-cja-sync").addEventListener("click", () => {
-  const select = document.getElementById("cja-dataview-select");
-  if (!select.value) return;
-  const label = select.options[select.selectedIndex].textContent;
-  const button = document.getElementById("btn-cja-sync");
-  resultEl.textContent = "Syncing " + label + "…";
-  resultEl.style.display = "block";
-  button.disabled = true;
-
-  api("/api/cja/sync", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ data_view_id: select.value }),
-  })
-    .then(data => {
-      renderComponentsTable(data.state.components);
-      updateContextCoverage();
-      const total = data.added.metric + data.added.dimension;
-      const extra = (data.enriched ? " Added XDM paths/descriptions to " + data.enriched + " existing components." : "") +
-        (data.xdm_base_url_is_default ? " Note: your XDM base URL is still the placeholder (" + data.xdm_base_url + "). Set it on the Journeys page so XDM references point to your sandbox." : "");
-      resultEl.textContent = (total
-        ? "Synced " + label + ": " + data.added.metric + " new metrics and " + data.added.dimension + " new dimensions added to components-instances.ttl" +
-          (data.skipped ? " (" + data.skipped + " already existed and were left untouched)." : ".")
-        : "Synced " + label + ": nothing new. All " + data.total_pulled + " components already exist.") + extra;
-    })
-    .catch(err => { resultEl.textContent = "Sync failed: " + err.message; })
-    .finally(() => { button.disabled = false; });
-});
-
-loadCjaConfig();
 loadLiveState();
 </script>
 <script src="js/mode-banner.js"></script>

@@ -119,14 +119,14 @@ Pages call the API with relative `fetch("/api/...")` URLs. It reuses `graph_expl
 
 | Endpoint | Method | Used by |
 |---|---|---|
-| `/api/state` | GET | Most pages: mode, version, components, journeys, nav counts |
+| `/api/state` | GET | Most pages: mode, version, components (each with its data view ids), data views, journeys, nav counts |
 | `/api/mode` | POST | Mode switcher |
 | `/api/settings` | GET, POST | XDM base URL on the Journeys page |
 | `/api/components/<key>` | GET | Component edit page |
 | `/api/components/<key>/context` | POST | Component edit page: save |
 | `/api/cja/config` | GET, POST, DELETE | CJA connect dialog |
 | `/api/cja/dataviews` | GET | CJA connect dialog |
-| `/api/cja/sync` | POST | Components page: sync |
+| `/api/cja/sync` | POST | Sources page: sync dialog and per-data-view Re-sync |
 | `/api/journeys/generate` | POST | Journeys page: CSV import |
 | `/api/journeys/save` | POST | Journey form |
 | `/api/journeys/<slug>` | GET, DELETE | Journey form (load), Journeys page (delete) |
@@ -173,6 +173,9 @@ which one defines a component.
 - CJA/IMS errors surface as readable messages (HTTP 502 from the local API) and never include the secret.
   CJA names are untrusted input: table cells are built with `textContent`.
 
+The connect/sync dialog lives on the Sources page. Each synced data view there also has a Re-sync button
+and links to the Components page filtered to it (`components.html?dv=<id>`).
+
 `/api/sources` groups components by the data view in their `urn:cja:` refs. `last_synced` is the mtime of
 `components-instances.ttl`, so it is per file, not per data view.
 
@@ -185,9 +188,12 @@ if CJA can't be reached, the page shows the ID alone.
 ## Components
 
 - **Components page:** client-side search (name, CJA ID, XDM path, data layer variable, owner) and a filter
-  for context status and metric/dimension, re-applied after every render. Columns have fixed widths with
-  `.cell-truncate`, so long CJA IDs never push the Edit column off-screen. Context coverage always counts
-  all rows. `component_summary()` in `server.py` supplies the per-row fields.
+  for context status and metric/dimension, re-applied after every render. A data view filter (from
+  `data_views` in `/api/state`, kept in `?dv=`) narrows the table to one data view; shared components show
+  under each data view they reference, and "Not from CJA" lists components without a `urn:cja:` ref.
+  Columns have fixed widths with `.cell-truncate`, so long CJA IDs never push the Edit column off-screen.
+  Context coverage counts all rows of the selected data view, ignoring search and the type filter.
+  `component_summary()` in `server.py` supplies the per-row fields.
 - **Data layer variables** are stored in `datalayer-instances.ttl`, separate from journey files, so
   regenerating a journey never overwrites a mapping.
   - A name that already exists as a `DataLayerVariable` anywhere is reused; only a new `maps_to` is written.
@@ -217,6 +223,14 @@ Design points:
 - A journey's own legacy inline components and data layer variable are re-emitted verbatim, so editing
   never drops curated content.
 - `entry_criteria` (per stage) is carried by the form, the CSV columns and the reverse parser.
+- **One data view per journey.** `martech:data_view` on the Journey holds the CJA data view ID. Once any
+  data view is synced, save requires it and refuses a stage whose component has `urn:cja:` refs that
+  don't include it (`data_view_problems()` in `server.py`). Components without a CJA ref fit any data view,
+  and shared standard components carry every synced data view's ref, so they fit too. The form only offers
+  fitting components and marks stages that don't fit in red. For a journey saved before this,
+  `/api/journeys/<slug>` returns `data_view_suggested` when all its CJA components share exactly one data
+  view. CSV import reads an optional `data_view` column; without it, the data view is inferred the same
+  way, and the import is refused if that's ambiguous.
 - `_esc()` escapes backslashes and newlines, so multi-line text from the form produces valid Turtle.
 - **XDM base URL:** `DEFAULT_XDM_BASE_URL = "https://sandbox/SANDBOX_NAME/xdm/"` is a placeholder.
   The org's value is stored in `.mkg-settings.json` (normalized to exactly one trailing `/`) and passed to
@@ -249,7 +263,12 @@ to embedded demo data when opened as a plain file. Vendored libraries live in `u
 
 - **Graph** (`graph.html`): `vis-network`, data from `/api/graph-data` (`extract_full_graph()`), fallback
   `EMBEDDED_DATA` in the page. Class filters, a journey selector that dims everything outside the selected
-  journey, and a node detail panel.
+  journey, and a node detail panel. `/api/graph-data` adds `data_views` to each Component node and a
+  top-level `data_views` list; the data view filter (kept in `?dv=`) redraws the graph with that data view's
+  components, the journeys stored with it (plus their stages, measurements, KPIs and requirements) and the
+  data layer variables feeding those components. It rebuilds the vis datasets instead of hiding nodes,
+  because vis-network keeps hidden nodes in the physics layout. Journeys without a data view show only under
+  All data views.
 - **Query** (`query.html`): [Oxigraph](https://github.com/oxigraph/oxigraph) compiled to WASM runs SPARQL
   1.1 in the browser over `/api/ttl-bundle`. To work from `file://`:
   - `oxigraph.web.js` is the package's `web.js` with `export` keywords stripped (a classic script instead

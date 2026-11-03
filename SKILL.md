@@ -52,7 +52,11 @@ for calling the tool. As of when this skill was written, the core shape was:
 - **Key `Component` properties**: `definition` (plain-language meaning), `caveats` (known data-quality
   issues; always check this before quoting a number), `context` (why it matters), `owner`,
   `component_type` (`"metric"` or `"dimension"`), `refs` (a pointer to the component's authoritative
-  entity in CJA/AEP's own graph, treated as a reference only, not as content).
+  entity in CJA/AEP's own graph, treated as a reference only, not as content). A CJA ref has the form
+  `urn:cja:<dataViewId>:<componentId>`; a standard component like Visits can carry one per data view.
+- **`Journey.data_view`**: the ID of the CJA data view the journey is measured in. All of its CJA
+  components come from that data view, so query CJA in that data view when you pull its numbers. Journeys
+  saved before this property existed may not have it.
 - Namespace: `https://example.org/martech/ontology/` (prefix `martech:` in examples below). This is a
   placeholder base URI in the public template; a real org deployment may have swapped in their own.
   `get_ontology_schema()` tells you the truth regardless.
@@ -106,10 +110,12 @@ SELECT ?order ?stageLabel ?componentLabel ?ref WHERE {
 ### Example: every journey's stages, in order, with a filter value where one applies
 
 Useful when a component is shared across stages (e.g. one `page_name` dimension identifying several
-different steps by its value); the `filter_value` is what actually distinguishes them:
+different steps by its value); the `filter_value` is what actually distinguishes them. `?dataView` is
+the CJA data view the journey is measured in:
 ```sparql
-SELECT ?journeyLabel ?order ?stageLabel ?compLabel ?filterValue WHERE {
+SELECT ?journeyLabel ?dataView ?order ?stageLabel ?compLabel ?filterValue WHERE {
   ?journey a martech:Journey ; rdfs:label ?journeyLabel ; martech:has_stage ?stage .
+  OPTIONAL { ?journey martech:data_view ?dataView . }
   ?stage martech:order ?order ; rdfs:label ?stageLabel .
   ?m martech:measured_entity ?stage ; martech:measured_component ?comp .
   ?comp rdfs:label ?compLabel .

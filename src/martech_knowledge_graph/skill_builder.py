@@ -37,9 +37,11 @@ EXAMPLE_QUERIES = [
     (
         "Every journey's stages, in order, with a filter value where one applies",
         "Useful when a component is shared across stages (e.g. one dimension identifying several steps "
-        "by its value) -- the filter value is what actually distinguishes them:",
-        "SELECT ?journeyLabel ?order ?stageLabel ?compLabel ?filterValue WHERE {\n"
+        "by its value) -- the filter value is what actually distinguishes them. ?dataView is the CJA data "
+        "view the journey is measured in; query CJA in that data view:",
+        "SELECT ?journeyLabel ?dataView ?order ?stageLabel ?compLabel ?filterValue WHERE {\n"
         "  ?journey a martech:Journey ; rdfs:label ?journeyLabel ; martech:has_stage ?stage .\n"
+        "  OPTIONAL { ?journey martech:data_view ?dataView . }\n"
         "  ?stage martech:order ?order ; rdfs:label ?stageLabel .\n"
         "  ?m martech:measured_entity ?stage ; martech:measured_component ?comp .\n"
         "  ?comp rdfs:label ?compLabel .\n"
