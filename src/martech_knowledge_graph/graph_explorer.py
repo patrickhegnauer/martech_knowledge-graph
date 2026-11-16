@@ -35,7 +35,7 @@ MARTECH = Namespace("https://example.org/martech/ontology/")
 # adding graph structure)
 RELATIONSHIP_PREDICATES = [
     "has_stage", "rolls_up_to", "maps_to",
-    "addressed_by", "measured_entity", "measured_component",
+    "addressed_by", "measured_entity", "measured_component", "based_on",
 ]
 
 
@@ -54,6 +54,63 @@ def load_graph(ontology_path=ONTOLOGY_FILE, script_dir=EXAMPLES_DIR):
         g.parse(path, format="turtle")
 
     return g
+
+
+# --------------------------------------------------------------------------
+# Component activation. A CJA sync pulls in every component of a data view;
+# only the ones someone activated (or curated, or uses) count for pickers,
+# the graph view and agents. One rule, applied to any graph:
+#   - measured by a stage (journey or shared)  -> active, always
+#   - martech:active true / false              -> that
+#   - no flag                                  -> active once it has curated context
+# --------------------------------------------------------------------------
+
+CURATED_PREDICATES = ("definition", "caveats", "context", "owner")
+
+
+def used_components(g):
+    """Every component a Measurement measures, from a journey stage or a shared stage."""
+    return set(g.objects(None, MARTECH.measured_component))
+
+
+def is_curated(g, component):
+    return any(str(o).strip() for p in CURATED_PREDICATES for o in g.objects(component, MARTECH[p]))
+
+
+def inactive_components(g):
+    """URIs of the components in g that are inactive under the rule above."""
+    used = used_components(g)
+    inactive = set()
+    for c in g.subjects(RDF.type, MARTECH.Component):
+        if c in used:
+            continue
+        flag = g.value(c, MARTECH.active)
+        active = flag.toPython() is True if flag is not None else is_curated(g, c)
+        if not active:
+            inactive.add(c)
+    return inactive
+
+
+def without_inactive_components(g, inactive=None):
+    """A copy of g without inactive components: their own triples and anything pointing at them (a data
+    layer variable's maps_to). What agents see."""
+    inactive = inactive_components(g) if inactive is None else inactive
+    out = rdflib.Graph()
+    for prefix, ns in g.namespaces():
+        out.bind(prefix, ns)
+    for s, p, o in g:
+        if s not in inactive and o not in inactive:
+            out.add((s, p, o))
+    return out
+
+
+def filtered_instance_text(path, inactive):
+    """The file's Turtle without inactive components, or None when it holds none of them (copy it as is)."""
+    fg = rdflib.Graph()
+    fg.parse(path, format="turtle")
+    if not any(s in inactive or o in inactive for s, _, o in fg):
+        return None
+    return without_inactive_components(fg, inactive).serialize(format="turtle")
 
 
 def _local_name(uri):

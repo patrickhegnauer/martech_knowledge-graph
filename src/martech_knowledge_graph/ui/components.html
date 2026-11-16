@@ -51,23 +51,37 @@
       <select id="filter-dataview" aria-label="Data view" hidden>
         <option value="all">All data views</option>
       </select>
-      <input type="text" id="search-components" placeholder="Search components…">
+      <select id="filter-activation" aria-label="Active or inactive">
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+        <option value="all">Active and inactive</option>
+      </select>
+      <input type="text" id="search-components" placeholder="Search components or journeys…">
       <select id="filter-components">
         <option value="all">All</option>
         <option value="with-context">With context</option>
         <option value="missing-context">Missing context</option>
         <option value="metrics">Metrics</option>
         <option value="dimensions">Dimensions</option>
+        <option value="used">Used in a journey</option>
+        <option value="unused">Not used in any journey</option>
       </select>
       <span id="filter-count" class="cja-status-line"></span>
     </div>
+    <div class="toolbar" id="activation-toolbar" hidden>
+      <button type="button" class="secondary" id="btn-activate-shown">Activate all shown</button>
+      <button type="button" class="secondary" id="btn-deactivate-shown">Deactivate all shown</button>
+      <span id="activation-status" class="cja-status-line"></span>
+    </div>
+    <p class="note" id="activation-note" hidden>Only <strong>active</strong> components are offered in journeys and shared stages, shown in the graph, and visible to agents (MCP, skills, plugins). A CJA sync adds new components as inactive: activate the ones you need. Components used in a journey are always active.</p>
+    <p class="note" id="activation-empty" hidden>No active components yet. Pick <strong>Inactive</strong> above and activate what you need.</p>
 
     <div class="table-scroll">
 
 
       <table id="table-components" class="table-fixed">
         <colgroup>
-          <col style="width:15%"><col style="width:7%"><col style="width:16%"><col style="width:17%"><col style="width:19%"><col style="width:10%"><col style="width:11%"><col style="width:5%">
+          <col style="width:12%"><col style="width:7%"><col style="width:11%"><col style="width:12%"><col style="width:12%"><col style="width:8%"><col style="width:12%"><col style="width:11%"><col style="width:15%">
         </colgroup>
         <thead>
           <tr>
@@ -77,11 +91,14 @@
             <th>XDM path</th>
             <th>Data Layer Variables</th>
             <th>Owner</th>
+            <th>Used in journeys</th>
             <th>Context status</th>
             <th></th>
           </tr>
         </thead>
-        <tbody>
+        <!-- Static sample rows, shown only when the local API can't be reached; hidden until then so they never
+             flash before the real components load. -->
+        <tbody hidden>
           <tr data-component-id="product_views">
             <td>Product views</td>
             <td>metric</td>
@@ -89,6 +106,7 @@
             <td class="cell-truncate">commerce.productViews.value</td>
             <td class="cell-truncate">digitalData.conversion.conversionFunnel.step</td>
             <td>Digital Analytics</td>
+            <td class="cell-wrap">Ecommerce purchase journey</td>
             <td><span class="badge badge-has-context">Has context</span></td>
             <td><a href="component-edit.html?id=product_views">Edit</a></td>
           </tr>
@@ -99,6 +117,7 @@
             <td class="cell-truncate">commerce.productListAdds.value</td>
             <td class="cell-truncate">digitalData.conversion.conversionFunnel.step</td>
             <td>Digital Analytics</td>
+            <td class="cell-wrap">Ecommerce purchase journey</td>
             <td><span class="badge badge-has-context">Has context</span></td>
             <td><a href="component-edit.html?id=product_list_adds">Edit</a></td>
           </tr>
@@ -109,6 +128,7 @@
             <td class="cell-truncate">commerce.checkouts.value</td>
             <td class="cell-truncate">digitalData.conversion.conversionFunnel.step</td>
             <td>Digital Analytics</td>
+            <td class="cell-wrap">Ecommerce purchase journey</td>
             <td><span class="badge badge-has-context">Has context</span></td>
             <td><a href="component-edit.html?id=checkouts">Edit</a></td>
           </tr>
@@ -119,6 +139,7 @@
             <td class="cell-truncate">orders</td>
             <td class="cell-truncate">digitalData.conversion.conversionFunnel.step</td>
             <td>Digital Analytics</td>
+            <td class="cell-wrap">Ecommerce purchase journey</td>
             <td><span class="badge badge-missing-context">Missing context</span></td>
             <td><a href="component-edit.html?id=orders">Edit</a></td>
           </tr>
@@ -129,6 +150,7 @@
             <td class="cell-truncate">web.webPageDetails.name</td>
             <td class="cell-truncate">—</td>
             <td>Digital Analytics</td>
+            <td class="cell-wrap">Customer login journey</td>
             <td><span class="badge badge-missing-context">Missing context</span></td>
             <td><a href="component-edit.html?id=page_name">Edit</a></td>
           </tr>
@@ -164,7 +186,7 @@ function renderDataviewFilter(dataViews, components) {
   add("all", "All data views (" + components.length + ")");
   dataViews.forEach(dv => {
     const label = dv.name ? dv.name + " (" + dv.id + ")" : dv.id;
-    add(dv.id, label + " · " + dv.component_count);
+    add(dv.id, label + " · " + (dv.active_count !== undefined ? dv.active_count + " active of " : "") + dv.component_count);
   });
   const unsynced = components.filter(c => !(c.data_views || []).length).length;
   if (unsynced) add(NO_DATA_VIEW, "Not from CJA · " + unsynced);
@@ -183,10 +205,13 @@ function renderComponentsTable(components, dataViews) {
   renderDataviewFilter(dataViews || [], components);
   const tbody = document.querySelector("#table-components tbody");
   tbody.innerHTML = "";
+  tbody.hidden = false;
   components.forEach(c => {
     const tr = document.createElement("tr");
     tr.dataset.componentId = c.key;
     tr.dataset.dataViews = (c.data_views || []).join(" ");
+    tr.dataset.active = c.active === false ? "" : "1";
+    tr.dataset.used = c.used ? "1" : "";
     const nameTd = document.createElement("td");
     nameTd.className = "cell-wrap";
     nameTd.textContent = c.name;
@@ -207,6 +232,22 @@ function renderComponentsTable(components, dataViews) {
       if (cls) td.className = cls;
       tr.appendChild(td);
     });
+
+    // Journeys with a stage measured by this component, each linking to its form.
+    const usedTd = document.createElement("td");
+    usedTd.className = "cell-wrap";
+    const journeys = c.journeys || [];
+    if (!journeys.length) usedTd.textContent = "—";
+    journeys.forEach((j, i) => {
+      if (i) usedTd.appendChild(document.createTextNode(", "));
+      const link = document.createElement("a");
+      link.href = "journey-edit.html?slug=" + encodeURIComponent(j.slug);
+      link.textContent = j.label;
+      usedTd.appendChild(link);
+    });
+    usedTd.title = journeys.map(j => j.label).join(", ");
+    tr.appendChild(usedTd);
+
     const badgeTd = document.createElement("td");
     const badge = document.createElement("span");
     badge.className = "badge " + (c.has_context ? "badge-has-context" : "badge-missing-context");
@@ -214,14 +255,59 @@ function renderComponentsTable(components, dataViews) {
     badgeTd.appendChild(badge);
     tr.appendChild(badgeTd);
     const editTd = document.createElement("td");
+    const actions = document.createElement("div");
+    actions.className = "row-actions";
+    editTd.appendChild(actions);
     const a = document.createElement("a");
     a.href = "component-edit.html?id=" + encodeURIComponent(c.key);
+    a.className = "btn secondary btn-sm";
     a.textContent = "Edit";
-    editTd.appendChild(a);
+    actions.appendChild(a);
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "secondary btn-sm";
+    toggle.textContent = c.active === false ? "Activate" : "Deactivate";
+    if (c.active !== false && c.used) {
+      toggle.disabled = true;
+      toggle.title = "Used in journeys, so it stays active";
+    }
+    toggle.addEventListener("click", () => setActivation([c.key], c.active === false));
+    actions.appendChild(toggle);
     tr.appendChild(editTd);
     tbody.appendChild(tr);
   });
+  document.getElementById("activation-toolbar").hidden = false;
+  document.getElementById("activation-note").hidden = false;
   applyFilters();
+}
+
+function matchesActivation(tr) {
+  const show = document.getElementById("filter-activation").value;
+  const active = tr.dataset.active !== "";   // the static example rows have no flag: active
+  return show === "all" || (show === "active") === active;
+}
+
+function shownRows() {
+  return [...document.querySelectorAll("#table-components tbody tr")].filter(tr => !tr.hidden);
+}
+
+function setActivation(keys, active) {
+  const status = document.getElementById("activation-status");
+  status.textContent = (active ? "Activating " : "Deactivating ") + keys.length + "…";
+  return fetch("/api/components/activation", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keys: keys, active: active }),
+  })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (!ok) throw new Error(data.error || "request failed");
+      const n = data.changed.length;
+      status.textContent = (active ? "Activated " : "Deactivated ") + n + (n === 1 ? " component." : " components.") +
+        (data.skipped_used.length ? " " + data.skipped_used.length + " used in journeys stayed active." : "");
+      return loadLiveState();
+    })
+    .catch(err => { status.textContent = "Could not change it: " + err.message; });
 }
 
 function applyFilters() {
@@ -233,20 +319,54 @@ function applyFilters() {
     const cells = tr.querySelectorAll("td");
     const type = cells[1].textContent.trim();
     const hasContext = !!tr.querySelector(".badge-has-context");
-    const matchesText = !query || [0, 2, 3, 4, 5].some(i => cells[i].textContent.toLowerCase().includes(query));
+    const used = cells[6].textContent.trim() !== "—";
+    const matchesText = !query || [0, 2, 3, 4, 5, 6].some(i => cells[i].textContent.toLowerCase().includes(query));
     const matchesFilter =
       filter === "all" ||
       (filter === "with-context" && hasContext) ||
       (filter === "missing-context" && !hasContext) ||
       (filter === "metrics" && type === "metric") ||
-      (filter === "dimensions" && type === "dimension");
-    const visible = matchesText && matchesFilter && matchesDataview(tr);
+      (filter === "dimensions" && type === "dimension") ||
+      (filter === "used" && used) ||
+      (filter === "unused" && !used);
+    const visible = matchesText && matchesFilter && matchesDataview(tr) && matchesActivation(tr);
     tr.hidden = !visible;
     if (visible) shown++;
   });
   document.getElementById("filter-count").textContent = "Showing " + shown + " of " + rows.length;
+  const show = document.getElementById("filter-activation").value;
+  const anyActive = [...rows].some(tr => tr.dataset.active !== "");
+  document.getElementById("activation-empty").hidden = !(show === "active" && rows.length && !anyActive);
+  document.getElementById("btn-activate-shown").disabled = !shownRows().some(tr => tr.dataset.active === "");
+  document.getElementById("btn-deactivate-shown").disabled =
+    !shownRows().some(tr => tr.dataset.active !== "" && tr.dataset.used === "");
   updateContextCoverage();
 }
+
+document.getElementById("filter-activation").value =
+  ["active", "inactive", "all"].includes(new URLSearchParams(location.search).get("show"))
+    ? new URLSearchParams(location.search).get("show") : "active";
+document.getElementById("filter-activation").addEventListener("change", () => {
+  const show = document.getElementById("filter-activation").value;
+  const url = new URL(location.href);
+  if (show === "active") url.searchParams.delete("show"); else url.searchParams.set("show", show);
+  history.replaceState(null, "", url);
+  applyFilters();
+});
+
+document.getElementById("btn-activate-shown").addEventListener("click", () => {
+  const keys = shownRows().filter(tr => tr.dataset.active === "").map(tr => tr.dataset.componentId);
+  if (keys.length && confirm("Activate " + keys.length + (keys.length === 1 ? " component?" : " components?"))) {
+    setActivation(keys, true);
+  }
+});
+document.getElementById("btn-deactivate-shown").addEventListener("click", () => {
+  const keys = shownRows().filter(tr => tr.dataset.active !== "" && tr.dataset.used === "").map(tr => tr.dataset.componentId);
+  if (keys.length && confirm("Deactivate " + keys.length + (keys.length === 1 ? " component?" : " components?") +
+      " Components used in journeys stay active.")) {
+    setActivation(keys, false);
+  }
+});
 
 document.getElementById("search-components").addEventListener("input", applyFilters);
 document.getElementById("filter-components").addEventListener("change", applyFilters);
@@ -268,15 +388,17 @@ function loadLiveState() {
       return true;
     })
     .catch(() => {
+      document.querySelector("#table-components tbody").hidden = false;
       updateContextCoverage();
       note.textContent = "Showing static sample data. Start the local API (martech-knowledge-graph serve) for live data.";
       return false;
     });
 }
 
-// Coverage of the selected data view, independent of the search box and the type filter.
+// Coverage of the selected data view's active components, independent of the search box and the type filter.
 function updateContextCoverage() {
-  const rows = [...document.querySelectorAll("#table-components tbody tr")].filter(matchesDataview);
+  const rows = [...document.querySelectorAll("#table-components tbody tr")]
+    .filter(tr => matchesDataview(tr) && tr.dataset.active !== "");
   const total = rows.length;
   let withContext = 0;
   rows.forEach(tr => { if (tr.querySelector(".badge-has-context")) withContext++; });

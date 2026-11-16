@@ -49,6 +49,10 @@
             <select id="select-dataview" aria-label="Data view"></select>
             <p class="note">Shows that data view's components, the journeys measured in it, and what they connect to.</p>
           </div>
+          <div id="inactive-filter" hidden>
+            <label><input type="checkbox" id="show-inactive"> Show inactive components</label>
+            <p class="note" id="inactive-note"></p>
+          </div>
 
           <h3>Classes</h3>
           <div class="checkbox-list" id="class-filters">
@@ -56,6 +60,7 @@
             <label><input type="checkbox" name="class-filter" value="KPI" checked> KPI</label>
             <label><input type="checkbox" name="class-filter" value="Journey" checked> Journey</label>
             <label><input type="checkbox" name="class-filter" value="Stage" checked> Stage</label>
+            <label><input type="checkbox" name="class-filter" value="SharedStage"> SharedStage</label>
             <label><input type="checkbox" name="class-filter" value="Component" checked> Component</label>
             <label><input type="checkbox" name="class-filter" value="DataLayerVariable" checked> DataLayerVariable</label>
             <label><input type="checkbox" name="class-filter" value="Measurement" checked> Measurement</label>
@@ -97,7 +102,7 @@ try { localStorage.setItem("mkg-visited-graph", "1"); } catch (e) { /* private b
 const EMBEDDED_DATA = {"nodes": [{"id": "https://example.org/martech/data/login/req_login_frequency", "label": "Understand monthly login frequency", "group": "Requirement", "properties": {"comment": "We want to know how many logins we have monthly (MAU), and how that compares to overall sessions.", "status": "active"}}, {"id": "https://example.org/martech/data/ecommerce/component_product_views", "label": "Product views", "group": "Component", "properties": {"component_type": "metric", "definition": "Number of times a product detail page was viewed.", "caveats": "Counts page views, not unique visitors — a visitor viewing the same product twice counts twice.", "context": "Entry point for the purchase funnel; used to benchmark top-of-funnel demand.", "owner": "Digital Analytics", "refs": "https://sandbox/SANDBOX_NAME/xdm/commerce.productViews.value"}}, {"id": "https://example.org/martech/data/ecommerce/measurement_checkout", "label": "measurement_checkout", "group": "Measurement", "properties": {}}, {"id": "https://example.org/martech/data/login/measurement_login_success", "label": "measurement_login_success", "group": "Measurement", "properties": {"filter_value": "/customer/login/success"}}, {"id": "https://example.org/martech/data/ecommerce/req_shop_performance", "label": "Understand shop performance and drop-off", "group": "Requirement", "properties": {"comment": "We want to understand how our shop is performing, and where in the journey people drop off.", "status": "active"}}, {"id": "https://example.org/martech/data/ecommerce/component_checkouts", "label": "Checkouts", "group": "Component", "properties": {"component_type": "metric", "definition": "Number of times a user started the checkout process.", "caveats": "Counts checkout starts, not completions — a user can start checkout multiple times without purchasing.", "context": "Marks the transition from browsing to transactional intent.", "owner": "Digital Analytics", "refs": "https://sandbox/SANDBOX_NAME/xdm/commerce.checkouts.value"}}, {"id": "https://example.org/martech/data/login/component_page_name", "label": "Page name", "group": "Component", "properties": {"component_type": "dimension", "definition": "The page name/path captured on each page view; used here to identify funnel steps by value.", "caveats": "A shared, general-purpose dimension — filtering by value (e.g. /customer/login) is required to isolate a specific journey step. The raw component alone doesn't identify a stage.", "context": "A general-purpose dimension, likely reused by other journeys in a real implementation — filtering by value is what distinguishes each specific use, not the component itself.", "owner": "Digital Analytics", "refs": "https://sandbox/SANDBOX_NAME/xdm/web.webPageDetails.name"}}, {"id": "https://example.org/martech/data/ecommerce/dlv_conversion_funnel_step", "label": "digitalData.conversion.conversionFunnel.step", "group": "DataLayerVariable", "properties": {"source_system": "Web data layer (digitalData)"}}, {"id": "https://example.org/martech/data/ecommerce/stage_cart_add", "label": "Cart add", "group": "Stage", "properties": {"order": "2"}}, {"id": "https://example.org/martech/data/ecommerce/stage_order", "label": "Order", "group": "Stage", "properties": {"order": "4"}}, {"id": "https://example.org/martech/data/ecommerce/stage_product_view", "label": "Product view", "group": "Stage", "properties": {"order": "1"}}, {"id": "https://example.org/martech/data/ecommerce/stage_checkout", "label": "Checkout", "group": "Stage", "properties": {"order": "3"}}, {"id": "https://example.org/martech/data/login/measurement_login", "label": "measurement_login", "group": "Measurement", "properties": {"filter_value": "/customer/login"}}, {"id": "https://example.org/martech/data/login/stage_login", "label": "Login", "group": "Stage", "properties": {"order": "1"}}, {"id": "https://example.org/martech/data/ecommerce/journey_ecommerce_funnel", "label": "Ecommerce purchase journey", "group": "Journey", "properties": {"owner": "Digital Marketing"}}, {"id": "https://example.org/martech/data/login/kpi_login_rate", "label": "Monthly login rate", "group": "KPI", "properties": {"formula": "Monthly logins / Sessions", "owner": "Product Analytics", "target": "0.35", "comment": "Target: 35% of monthly sessions include a login (illustrative example, not a real commitment)."}}, {"id": "https://example.org/martech/data/ecommerce/measurement_cart_add", "label": "measurement_cart_add", "group": "Measurement", "properties": {}}, {"id": "https://example.org/martech/data/ecommerce/component_orders", "label": "Orders", "group": "Component", "properties": {"component_type": "metric", "definition": "Number of completed purchase orders.", "caveats": "Includes orders later cancelled or refunded — not net of returns.", "context": "The funnel's terminal event and the numerator of the order conversion rate KPI.", "owner": "Digital Analytics", "refs": "https://sandbox/SANDBOX_NAME/xdm/orders"}}, {"id": "https://example.org/martech/data/ecommerce/measurement_product_view", "label": "measurement_product_view", "group": "Measurement", "properties": {}}, {"id": "https://example.org/martech/data/ecommerce/measurement_order", "label": "measurement_order", "group": "Measurement", "properties": {}}, {"id": "https://example.org/martech/data/login/dlv_page_info_name", "label": "digitalData.page.pageInfo.name", "group": "DataLayerVariable", "properties": {"source_system": "Web data layer (digitalData)"}}, {"id": "https://example.org/martech/data/login/journey_login", "label": "Customer login journey", "group": "Journey", "properties": {"owner": "Product Analytics"}}, {"id": "https://example.org/martech/data/ecommerce/component_product_list_adds", "label": "Product list adds", "group": "Component", "properties": {"component_type": "metric", "definition": "Number of times a product was added to the cart.", "caveats": "Does not deduplicate repeated adds of the same product within one session.", "context": "First explicit purchase-intent signal in the funnel.", "owner": "Digital Analytics", "refs": "https://sandbox/SANDBOX_NAME/xdm/commerce.productListAdds.value"}}, {"id": "https://example.org/martech/data/login/stage_login_success", "label": "Login success", "group": "Stage", "properties": {"order": "2"}}, {"id": "https://example.org/martech/data/ecommerce/kpi_order_conversion_rate", "label": "Order conversion rate", "group": "KPI", "properties": {"formula": "Orders / Product Views", "owner": "Ecommerce / Digital Marketing", "target": "0.0020", "comment": "Current value (2026): 0.11%. Target: 0.20% (illustrative example, not a real commitment)."}}], "edges": [{"from": "https://example.org/martech/data/login/req_login_frequency", "to": "https://example.org/martech/data/login/kpi_login_rate", "label": "addressed_by"}, {"from": "https://example.org/martech/data/ecommerce/measurement_checkout", "to": "https://example.org/martech/data/ecommerce/stage_checkout", "label": "measured_entity"}, {"from": "https://example.org/martech/data/ecommerce/measurement_checkout", "to": "https://example.org/martech/data/ecommerce/component_checkouts", "label": "measured_component"}, {"from": "https://example.org/martech/data/login/measurement_login_success", "to": "https://example.org/martech/data/login/stage_login_success", "label": "measured_entity"}, {"from": "https://example.org/martech/data/login/measurement_login_success", "to": "https://example.org/martech/data/login/component_page_name", "label": "measured_component"}, {"from": "https://example.org/martech/data/ecommerce/req_shop_performance", "to": "https://example.org/martech/data/ecommerce/kpi_order_conversion_rate", "label": "addressed_by"}, {"from": "https://example.org/martech/data/ecommerce/dlv_conversion_funnel_step", "to": "https://example.org/martech/data/ecommerce/component_product_views", "label": "maps_to"}, {"from": "https://example.org/martech/data/ecommerce/dlv_conversion_funnel_step", "to": "https://example.org/martech/data/ecommerce/component_product_list_adds", "label": "maps_to"}, {"from": "https://example.org/martech/data/ecommerce/dlv_conversion_funnel_step", "to": "https://example.org/martech/data/ecommerce/component_checkouts", "label": "maps_to"}, {"from": "https://example.org/martech/data/ecommerce/dlv_conversion_funnel_step", "to": "https://example.org/martech/data/ecommerce/component_orders", "label": "maps_to"}, {"from": "https://example.org/martech/data/ecommerce/stage_order", "to": "https://example.org/martech/data/ecommerce/kpi_order_conversion_rate", "label": "rolls_up_to"}, {"from": "https://example.org/martech/data/login/measurement_login", "to": "https://example.org/martech/data/login/stage_login", "label": "measured_entity"}, {"from": "https://example.org/martech/data/login/measurement_login", "to": "https://example.org/martech/data/login/component_page_name", "label": "measured_component"}, {"from": "https://example.org/martech/data/ecommerce/journey_ecommerce_funnel", "to": "https://example.org/martech/data/ecommerce/stage_product_view", "label": "has_stage"}, {"from": "https://example.org/martech/data/ecommerce/journey_ecommerce_funnel", "to": "https://example.org/martech/data/ecommerce/stage_cart_add", "label": "has_stage"}, {"from": "https://example.org/martech/data/ecommerce/journey_ecommerce_funnel", "to": "https://example.org/martech/data/ecommerce/stage_checkout", "label": "has_stage"}, {"from": "https://example.org/martech/data/ecommerce/journey_ecommerce_funnel", "to": "https://example.org/martech/data/ecommerce/stage_order", "label": "has_stage"}, {"from": "https://example.org/martech/data/ecommerce/measurement_cart_add", "to": "https://example.org/martech/data/ecommerce/stage_cart_add", "label": "measured_entity"}, {"from": "https://example.org/martech/data/ecommerce/measurement_cart_add", "to": "https://example.org/martech/data/ecommerce/component_product_list_adds", "label": "measured_component"}, {"from": "https://example.org/martech/data/ecommerce/measurement_product_view", "to": "https://example.org/martech/data/ecommerce/stage_product_view", "label": "measured_entity"}, {"from": "https://example.org/martech/data/ecommerce/measurement_product_view", "to": "https://example.org/martech/data/ecommerce/component_product_views", "label": "measured_component"}, {"from": "https://example.org/martech/data/ecommerce/measurement_order", "to": "https://example.org/martech/data/ecommerce/stage_order", "label": "measured_entity"}, {"from": "https://example.org/martech/data/ecommerce/measurement_order", "to": "https://example.org/martech/data/ecommerce/component_orders", "label": "measured_component"}, {"from": "https://example.org/martech/data/login/dlv_page_info_name", "to": "https://example.org/martech/data/login/component_page_name", "label": "maps_to"}, {"from": "https://example.org/martech/data/login/journey_login", "to": "https://example.org/martech/data/login/stage_login", "label": "has_stage"}, {"from": "https://example.org/martech/data/login/journey_login", "to": "https://example.org/martech/data/login/stage_login_success", "label": "has_stage"}, {"from": "https://example.org/martech/data/login/stage_login_success", "to": "https://example.org/martech/data/login/kpi_login_rate", "label": "rolls_up_to"}]};
 
 const GROUP_COLORS = {
-  Requirement: "#F0997B", KPI: "#5DCAA5", Journey: "#EF9F27", Stage: "#F0997B",
+  Requirement: "#F0997B", KPI: "#5DCAA5", Journey: "#EF9F27", Stage: "#F0997B", SharedStage: "#F7C6A9",
   Component: "#7F77DD", DataLayerVariable: "#ED93B1", Measurement: "#B4B2A9"
 };
 
@@ -123,7 +128,8 @@ function populateDataViewSelect(dataViews) {
     select.appendChild(opt);
   };
   add("all", "All data views");
-  dataViews.forEach(dv => add(dv.id, (dv.name ? dv.name + " (" + dv.id + ")" : dv.id) + " · " + dv.component_count));
+  dataViews.forEach(dv => add(dv.id, (dv.name ? dv.name + " (" + dv.id + ")" : dv.id) + " · " +
+    (dv.active_count !== undefined ? dv.active_count + " active of " : "") + dv.component_count));
   const wanted = new URLSearchParams(location.search).get("dv");
   select.value = dataViews.some(d => d.id === wanted) ? wanted : "all";
   document.getElementById("dataview-filter").hidden = dataViews.length === 0;
@@ -161,6 +167,7 @@ function initGraph(data) {
     const ids = new Set([journeyId]);
     const stages = data.edges.filter(e => e.from === journeyId && e.label === "has_stage").map(e => e.to);
     stages.forEach(s => ids.add(s));
+    data.edges.filter(e => e.label === "based_on" && stages.includes(e.from)).forEach(e => ids.add(e.to));
 
     const measurements = data.edges.filter(e => e.label === "measured_entity" && stages.includes(e.to)).map(e => e.from);
     const components = new Set();
@@ -196,8 +203,25 @@ function initGraph(data) {
     };
   }
 
+  // --- Inactive components (synced but not activated) are left out unless asked for, together with data
+  // layer variables that only feed them. Used components are always active, so no journey loses a stage. ---
+  function withoutInactive(subset) {
+    if (document.getElementById("show-inactive").checked) return subset;
+    const dropped = new Set(subset.nodes.filter(n => n.group === "Component" && n.active === false).map(n => n.id));
+    const kept = subset.nodes.filter(n => !dropped.has(n.id)).map(n => n.id);
+    const keptSet = new Set(kept);
+    subset.nodes.filter(n => n.group === "DataLayerVariable").forEach(n => {
+      const targets = subset.edges.filter(e => e.from === n.id && e.label === "maps_to").map(e => e.to);
+      if (targets.length && targets.every(t => dropped.has(t))) keptSet.delete(n.id);
+    });
+    return {
+      nodes: subset.nodes.filter(n => keptSet.has(n.id)),
+      edges: subset.edges.filter(e => keptSet.has(e.from) && keptSet.has(e.to)),
+    };
+  }
+
   function draw() {
-    current = dataViewSubset(document.getElementById("select-dataview").value);
+    current = withoutInactive(dataViewSubset(document.getElementById("select-dataview").value));
     visEdges.clear();
     visNodes.clear();
     visNodes.add(current.nodes.map(n => ({
@@ -248,6 +272,12 @@ function initGraph(data) {
     visNodes.update(current.nodes.map(n => ({ id: n.id, opacity: !ids || ids.has(n.id) ? 1 : 0.15 })));
   }
   document.getElementById("select-journey").addEventListener("change", applyJourneyHighlight);
+
+  const inactiveCount = data.nodes.filter(n => n.group === "Component" && n.active === false).length;
+  document.getElementById("inactive-filter").hidden = inactiveCount === 0;
+  document.getElementById("inactive-note").textContent = inactiveCount + " inactive component(s) hidden. " +
+    "Activate them on the Components page to curate them and show them here by default.";
+  document.getElementById("show-inactive").addEventListener("change", draw);
 
   document.getElementById("select-dataview").addEventListener("change", ev => {
     const url = new URL(location.href);

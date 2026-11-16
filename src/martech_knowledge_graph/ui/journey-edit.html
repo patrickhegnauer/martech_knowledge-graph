@@ -37,6 +37,10 @@
     <h2 id="page-title">New Journey</h2>
     <p><a href="journeys.html">&larr; Back to journeys</a></p>
     <p class="note" id="live-mode-note">Checking for a local API…</p>
+    <div class="panel" id="load-error" hidden>
+      <p class="note-error"><strong>Could not open this journey.</strong> <span id="load-error-text"></span></p>
+      <p class="note">Nothing was changed. The journey is still listed on the <a href="journeys.html">Journeys page</a>, and its file is shown on the <a href="data-files.html">Data Files page</a>.</p>
+    </div>
 
     <form id="form-journey" class="field-form" action="#" method="post">
       <h3>Journey</h3>
@@ -77,7 +81,7 @@
       </div>
       <label for="field-kpi-label">KPI name</label>
       <input type="text" id="field-kpi-label" autocomplete="off" placeholder="e.g. Order conversion rate">
-      <label for="field-kpi-formula">Formula</label>
+      <label for="field-kpi-formula">Formula (optional)</label>
       <input type="text" id="field-kpi-formula" autocomplete="off" placeholder="e.g. Orders / Product Views">
       <label for="field-kpi-owner">KPI owner</label>
       <input type="text" id="field-kpi-owner" autocomplete="off">
@@ -91,7 +95,7 @@
       <div class="table-scroll">
         <table id="table-stages" class="table-fixed">
           <colgroup>
-            <col style="width:3%"><col style="width:16%"><col style="width:22%"><col style="width:11%"><col style="width:15%"><col style="width:7%"><col style="width:14%">
+            <col style="width:4%"><col style="width:20%"><col style="width:23%"><col style="width:12%"><col style="width:17%"><col style="width:8%"><col style="width:16%">
           </colgroup>
           <thead>
             <tr><th>#</th><th>Stage name</th><th>Component</th><th>Filter value</th><th>Entry criteria</th><th>Rolls up to KPI</th><th></th></tr>
@@ -101,13 +105,19 @@
       </div>
       <datalist id="components-list"></datalist>
       <p class="note note-error" id="components-empty" style="display:none;">No components yet. <a href="sources.html">Sync them from CJA</a> first.</p>
-      <button type="button" id="btn-add-stage" class="secondary">Add stage</button>
+      <p class="note" id="components-active-hint" style="display:none;">The component list only offers <strong>active</strong> components. Missing one? <a href="components.html?show=inactive">Activate it on the Components page</a>.</p>
+      <p class="button-row">
+        <button type="button" id="btn-add-stage" class="secondary">Add stage</button>
+        <select id="select-shared-stage" aria-label="Shared stage"></select>
+        <button type="button" id="btn-add-shared-stage" class="secondary">Add shared stage</button>
+      </p>
+      <p class="note">A <strong>shared stage</strong> comes from the shared library: its name, component, filter value and entry criteria are the same in every journey that uses it, while its position and KPI roll-up are this journey's own. <strong>Save to library</strong> on a stage row shares it with other journeys.</p>
 
       <h3>Journey shape</h3>
       <p class="note">A live view of the stages above, in order. Read-only: edit the table to change it. Each journey here is a straight line, so there's nothing to branch or position; this just makes the path easier to scan than the table.</p>
       <div class="journey-diagram" id="journey-diagram"></div>
 
-      <p>
+      <p class="button-row">
         <button type="button" id="btn-save-journey">Save journey</button>
         <span id="save-status" class="note" style="display:none;"></span>
       </p>
@@ -132,6 +142,7 @@ const labelByKey = {};         // component key -> datalist text
 const componentTypeByKey = {}; // component key -> "metric" | "dimension", for the journey diagram's pills
 const dataViewsByKey = {};     // component key -> CJA data view ids it comes from ([] if not from CJA)
 let componentOrder = [];       // component keys in datalist order
+const activeByKey = {};        // component key -> active (only active components are offered)
 let slugTouched = false;
 let savedAsExisting = false;   // once a new journey is saved, later saves edit that file
 
@@ -153,7 +164,7 @@ const picker = {
   requirement: { value: "new", legacy: false, source: "new", id: "", update: false },
   kpi: { value: "new", legacy: false, source: "new", id: "", update: false },
 };
-let libraryData = { requirements: [], kpis: [] };
+let libraryData = { requirements: [], kpis: [], stages: [] };
 let libraryLoaded = false;
 
 function addOption(sel, value, text) {
@@ -247,12 +258,98 @@ function loadLibrary() {
   return fetch("/api/library")
     .then(r => { if (!r.ok) throw new Error("library unavailable"); return r.json(); })
     .then(data => { libraryData = data; })
-    .catch(() => { libraryData = { requirements: [], kpis: [] }; })
+    .catch(() => { libraryData = { requirements: [], kpis: [], stages: [] }; })
     .then(() => {
       libraryLoaded = true;
       rebuildPicker("requirement");
       rebuildPicker("kpi");
+      rebuildSharedStagePicker();
+      Array.from($("stages-tbody").children).forEach(renderSharedLine);
     });
+}
+
+// Shared stages. A row's dataset.sharedSource is "" (this journey's own stage), "library" (kept in sync with
+// the shared stage dataset.sharedId; its fields are read-only until "Edit shared stage") or "new" (saved to
+// the library as a new shared stage on save).
+function findSharedStage(id) {
+  return (libraryData.stages || []).find(e => e.id === id) || null;
+}
+
+function rebuildSharedStagePicker() {
+  const sel = $("select-shared-stage");
+  sel.innerHTML = "";
+  const fitting = (libraryData.stages || []).filter(e => componentFits(e.component_key));
+  addOption(sel, "", fitting.length ? "Pick a shared stage…" : "No shared stages for this data view");
+  fitting.forEach(e => addOption(sel, e.id, e.label + " · " + e.component_label + (e.filter_value ? " = " + e.filter_value : "") +
+    " (used by " + e.usage + ")"));
+  sel.disabled = !fitting.length;
+  $("btn-add-shared-stage").disabled = !fitting.length;
+}
+
+function setRowLocked(tr, locked) {
+  [".stage-label", ".stage-component", ".stage-filter", ".stage-entry-criteria"].forEach(sel => {
+    tr.querySelector(sel).readOnly = locked;
+  });
+}
+
+function rowButton(text, title, handler) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "secondary btn-sm";
+  b.textContent = text;
+  if (title) b.title = title;
+  b.addEventListener("click", handler);
+  return b;
+}
+
+function renderSharedLine(tr) {
+  const line = tr.querySelector(".stage-shared-line");
+  line.innerHTML = "";
+  const source = tr.dataset.sharedSource || "";
+  // The row's buttons sit together in one group, so they wrap as a unit under the pill rather than one by one.
+  const group = document.createElement("span");
+  group.className = "stage-shared-buttons";
+  const pill = text => {
+    const p = document.createElement("span");
+    p.className = "type-pill type-stage";
+    p.textContent = text;
+    line.appendChild(p);
+    line.appendChild(document.createTextNode(" "));
+  };
+  if (source === "library") {
+    const entry = findSharedStage(tr.dataset.sharedId);
+    const uses = entry ? entry.usage : 0;
+    pill("Shared");
+    if (tr.dataset.updateShared === "1") {
+      line.appendChild(document.createTextNode("Editing the shared stage: saving changes it for every journey using it (" +
+        uses + (uses === 1 ? " journey" : " journeys") + ")."));
+      line.classList.add("is-warning");
+    } else {
+      line.classList.remove("is-warning");
+      group.appendChild(rowButton("Edit shared stage", "Change it for every journey that uses it", () => {
+        tr.dataset.updateShared = "1";
+        setRowLocked(tr, false);
+        renderSharedLine(tr);
+      }));
+      group.appendChild(rowButton("Detach", "Keep it as a stage of this journey only", () => setRowShared(tr, "", "")));
+    }
+  } else if (source === "new") {
+    line.classList.remove("is-warning");
+    pill("New shared stage");
+    group.appendChild(rowButton("Undo", "Keep it as a stage of this journey only", () => setRowShared(tr, "", "")));
+  } else {
+    line.classList.remove("is-warning");
+    group.appendChild(rowButton("Save to library", "Share this stage with other journeys", () => setRowShared(tr, "new", "")));
+  }
+  if (group.childNodes.length) line.appendChild(group);
+}
+
+function setRowShared(tr, source, id) {
+  tr.dataset.sharedSource = source;
+  tr.dataset.sharedId = id || "";
+  tr.dataset.updateShared = "";
+  setRowLocked(tr, source === "library");
+  renderSharedLine(tr);
 }
 
 function showStatus(text, isError) {
@@ -283,7 +380,10 @@ function addStageRow(stage) {
     tr.appendChild(td);
     return input;
   }
-  inputCell("stage-label", stage.label, "e.g. Product view");
+  const labelInput = inputCell("stage-label", stage.label, "e.g. Product view");
+  const sharedLine = document.createElement("div");
+  sharedLine.className = "stage-shared-line";
+  labelInput.parentNode.appendChild(sharedLine);
   inputCell("stage-component", stage.component_key ? (labelByKey[stage.component_key] || stage.component_key) : "",
             "Type to search components…", "components-list");
   inputCell("stage-filter", stage.filter_value, "optional");
@@ -298,20 +398,25 @@ function addStageRow(stage) {
   tr.appendChild(rollTd);
 
   const actionTd = document.createElement("td");
+  const actions = document.createElement("div");
+  actions.className = "row-actions";
+  actionTd.appendChild(actions);
   [["↑", () => { if (tr.previousElementSibling) tr.parentNode.insertBefore(tr, tr.previousElementSibling); renumber(); }, "Move up"],
    ["↓", () => { if (tr.nextElementSibling) tr.parentNode.insertBefore(tr.nextElementSibling, tr); renumber(); }, "Move down"],
    ["✕", () => { tr.remove(); renumber(); }, "Remove stage"]].forEach(([text, handler, title]) => {
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "secondary";
+    b.className = "secondary btn-sm";
     b.textContent = text;
     b.title = title;
+    b.setAttribute("aria-label", title);
     b.addEventListener("click", handler);
-    actionTd.appendChild(b);
+    actions.appendChild(b);
   });
   tr.appendChild(actionTd);
 
   $("stages-tbody").appendChild(tr);
+  setRowShared(tr, stage.shared_id ? "library" : "", stage.shared_id);
   renumber();
 }
 
@@ -402,7 +507,7 @@ function componentFits(key) {
 function rebuildComponentList() {
   const list = $("components-list");
   list.innerHTML = "";
-  componentOrder.filter(componentFits).forEach(key => {
+  componentOrder.filter(key => activeByKey[key] && componentFits(key)).forEach(key => {
     const opt = document.createElement("option");
     opt.value = labelByKey[key];
     list.appendChild(opt);
@@ -438,6 +543,7 @@ function setDataView(value, note) {
   $("note-dataview").textContent = note || "Every CJA component of the stages must come from this data view. " +
     "Standard components such as Visits or Day, and components that are not from CJA, fit any data view.";
   rebuildComponentList();
+  rebuildSharedStagePicker();
 }
 
 function collectSpec() {
@@ -454,6 +560,9 @@ function collectSpec() {
       filter_value: tr.querySelector(".stage-filter").value,
       entry_criteria: tr.querySelector(".stage-entry-criteria").value,
       rolls_up_to_kpi: tr.querySelector(".stage-rollup").checked,
+      shared_source: tr.dataset.sharedSource || "",
+      shared_id: tr.dataset.sharedId || "",
+      update_shared: tr.dataset.updateShared === "1",
     };
   });
   return {
@@ -505,6 +614,13 @@ $("field-label").addEventListener("input", () => {
 });
 $("field-slug").addEventListener("input", () => { slugTouched = true; });
 $("btn-add-stage").addEventListener("click", () => addStageRow());
+$("btn-add-shared-stage").addEventListener("click", () => {
+  const entry = findSharedStage($("select-shared-stage").value);
+  if (!entry) return;
+  addStageRow({ label: entry.label, component_key: entry.component_key, filter_value: entry.filter_value,
+                entry_criteria: entry.entry_criteria, shared_id: entry.id });
+  $("select-shared-stage").value = "";
+});
 $("stages-tbody").addEventListener("input", renderJourneyDiagram);
 $("stages-tbody").addEventListener("change", () => { renderJourneyDiagram(); markStageRows(); });
 $("select-dataview").addEventListener("change", () => setDataView($("select-dataview").value));
@@ -528,6 +644,10 @@ $("btn-save-journey").addEventListener("click", () => {
     showStatus("Stage " + wrongDataViewRows.join(", ") + ": the component is not in the selected data view. Pick one from that data view.", true);
     return;
   }
+  if (spec.stages.length && !spec.stages.some(st => st.rolls_up_to_kpi)) {
+    showStatus("Mark at least one stage as \"Rolls up to KPI\" (usually the last one): that is what links the journey to its KPI.", true);
+    return;
+  }
   showStatus("Saving…", false);
   fetch("/api/journeys/save", {
     method: "POST",
@@ -537,7 +657,16 @@ $("btn-save-journey").addEventListener("click", () => {
     .then(r => r.json().then(data => ({ ok: r.ok, data })))
     .then(({ ok, data }) => {
       if (!ok) throw new Error(data.error || "save failed");
-      showStatus("Saved.", false);
+      showStatus((data.updated_journeys || []).length
+        ? "Saved. The shared stage change also updated: " + data.updated_journeys.join(", ") + "."
+        : "Saved.", false);
+      // Rows saved to the library, or edited there, are now plain shared rows.
+      Array.from($("stages-tbody").children).forEach((tr, i) => {
+        const saved = (data.stages || [])[i];
+        if (!saved) return;
+        tr.dataset.key = saved.key;
+        setRowShared(tr, saved.shared_id ? "library" : "", saved.shared_id);
+      });
       $("turtle-preview").textContent = data.turtle;
       $("preview-section").hidden = false;
       $("page-title").textContent = "Edit Journey: " + spec.journey_label;
@@ -565,9 +694,11 @@ fetch("/api/state")
       labelByKey[c.key] = text;
       componentTypeByKey[c.key] = c.type;
       dataViewsByKey[c.key] = c.data_views || [];
+      activeByKey[c.key] = c.active !== false;
       componentOrder.push(c.key);
     });
     $("components-empty").style.display = data.components.length ? "none" : "block";
+    $("components-active-hint").style.display = data.components.some(c => c.active === false) ? "block" : "none";
 
     // Data view: required once any data view is synced. A new journey starts from ?dv= or the only one.
     const dataViews = data.data_views || [];
@@ -588,6 +719,9 @@ fetch("/api/state")
       .then(spec => {
         $("page-title").textContent = "Edit Journey: " + spec.journey_label;
         fillForm(spec);
+        if (!spec.stages.some(st => st.rolls_up_to_kpi)) {
+          showStatus("No stage rolls up to the KPI yet. Tick \"Rolls up to KPI\" on one (usually the last) before saving.", true);
+        }
         if (spec.data_view || !dataViews.length) {
           setDataView(spec.data_view);
         } else if (spec.data_view_suggested) {
@@ -603,6 +737,12 @@ fetch("/api/state")
   .catch(err => {
     $("live-mode-note").textContent = "Could not load: " + err.message;
     $("btn-save-journey").disabled = true;
+    // An edit that fails to load must not look like an empty journey: say why and hide the blank form.
+    if (editing) {
+      $("load-error-text").textContent = err.message;
+      $("load-error").hidden = false;
+      $("form-journey").hidden = true;
+    }
   });
 </script>
 <script src="js/mode-banner.js"></script>

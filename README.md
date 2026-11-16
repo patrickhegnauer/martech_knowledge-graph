@@ -69,7 +69,7 @@ every endpoint, and the design decisions behind them.
 | `src/martech_knowledge_graph/examples/*.ttl` | Bundled example journey data (a 4-step ecommerce funnel, a 2-step login flow): this is the **demo** workspace itself (read-only), toggled on/off with the rest of the UI's data-mode switcher, not copied anywhere |
 | `src/martech_knowledge_graph/graph_explorer.py` | Internal library `server.py` and `mcp_server.py` use to load the graph and extract data from it; not a standalone tool |
 | `src/martech_knowledge_graph/journey_builder.py` | Generates correct turtle from structured input (a spreadsheet or Python), instead of hand-writing it |
-| `src/martech_knowledge_graph/library.py` | The shared requirement and KPI library: reads and writes `library-instances.ttl` in your data directory; see [Shared requirements and KPIs](#shared-requirements-and-kpis-library) |
+| `src/martech_knowledge_graph/library.py` | The shared requirement, KPI and stage library: reads and writes `library-instances.ttl` in your data directory; see [Shared requirements, KPIs and stages](#shared-requirements-kpis-and-stages-library) |
 | `src/martech_knowledge_graph/workspace.py` | Shared demo/org mode resolution, read by `server.py` and `mcp_server.py` so both processes agree on which workspace is active |
 | `src/martech_knowledge_graph/cja_client.py` | Small stdlib client for the Adobe CJA API (OAuth Server-to-Server token, data views, metrics, dimensions) used by the CJA sync |
 | `src/martech_knowledge_graph/export.py` | Behind `martech-knowledge-graph export-mcp`: scaffolds a folder you can deploy to Prefect Horizon, see [MCP server](#mcp-server) |
@@ -268,7 +268,8 @@ your data views. Enter client ID, client secret, org ID (`...@AdobeOrg`) and sco
 token from Adobe; only if that works are the credentials saved, server-side, in `.mkg-cja.json` in your
 data directory (never in the browser, never in a `.ttl`, never in an `export-mcp` snapshot).
 
-Then pick a data view and sync. All of its metrics and dimensions are added as components with:
+Then pick a data view and sync. All of its metrics and dimensions are added as components, **inactive** until
+you activate the ones you need on the Components page (see [Activating components](#activating-components)), with:
 - a `martech:refs` pointer to the CJA component (`urn:cja:<dataViewId>:<componentId>`, shown as the "CJA
   Component ID" column),
 - a second `martech:refs` to the **XDM field**: your XDM base URL plus the schema path CJA reports (only
@@ -301,13 +302,30 @@ Every component (from a CJA sync or from a journey) is edited from its **Edit** 
   journey files so regenerating a journey never overwrites them. An existing variable name is reused, not
   duplicated; mappings that come from a journey show as read-only "from journey".
 
-The Components table has search (name, CJA ID, XDM path, data layer variable, owner) and a filter for context
-status and metric/dimension, and shows the CJA ID, XDM path and data layer variable of every component.
+The Components table has search (name, CJA ID, XDM path, data layer variable, owner, journey) and a filter for
+context status, metric/dimension, and whether the component is used in a journey. It shows the CJA ID, XDM
+path and data layer variable of every component, and a **Used in journeys** column listing each journey that
+measures a stage with it, linked to that journey's form.
 
 With more than one data view synced, a **data view** filter narrows the table to one data view. Standard
 components appear under every data view that uses them, and components that don't come from CJA are listed
 under "Not from CJA". Context coverage follows the selected data view. The choice is kept in the URL
 (`components.html?dv=<id>`); the Sources page links each data view's component count there.
+
+### Activating components
+
+A CJA sync brings in every component of a data view, usually far more than you use. So components have an
+**active** state, and only active ones count:
+- The Components page shows **Active** components by default. Switch to **Inactive** to find the rest, and use
+  **Activate** on a row, or **Activate all shown** on a filtered list (e.g. search "pagedetails", then activate
+  all shown).
+- Only active components are offered in the journey form and the shared-stage editor, shown in the graph
+  viewer (unless you tick **Show inactive components**), counted in context coverage, and visible to agents
+  (MCP server, generated skills, `build-plugin`, `export-mcp`).
+- A sync adds new components as **inactive**. Saving a component's context activates it, and a component used
+  in a journey or shared stage is always active (it can't be deactivated).
+- Components synced before this existed count as active if they are used or have any curated context; all
+  others start inactive. Nothing is deleted: an inactive component keeps all its data in the file.
 
 ## Browsing the graph
 
@@ -317,16 +335,23 @@ filter redraws the graph with only that data view's components, the journeys mea
 stages, KPIs and requirements), and the data layer variables feeding those components. Journeys without a
 data view stored only show under "All data views".
 
+Shared stage nodes from the library are hidden by default: each journey's own stage already links to the
+component it shares, so the graph shows one component connected to every journey using it. Tick
+**SharedStage** in the class filter to see which stages come from the library (`based_on`).
+
 ## Adding a new journey
 
 You don't need to hand-write turtle. Four ways in:
 
 **Journey form (recommended)**: Journeys → **New journey**. Fill in the journey, requirement and KPI once,
-then add one row per stage and pick each stage's component from a searchable list of the components you
-already have (synced from CJA and curated). Nothing is retyped: a stage *references* its component, so its
+then add one row per stage and pick each stage's component from a searchable list of your **active**
+components (synced from CJA, activated and curated). Nothing is retyped: a stage *references* its component, so its
 definition, caveats and context flow in from the Components page. Use a **filter value** when several stages
 share one component (e.g. the same page-name dimension with different page paths), and tick **Rolls up to
-KPI** on the stage(s) that feed the KPI. Existing journeys have an **Edit** link in the table: reorder,
+KPI** on the stage(s) that feed the KPI. At least one stage must roll up: that is what links the journey to its
+KPI, so saving (and CSV import) refuses a journey without it. Journeys saved before this check, with no stage
+rolling up, open again with their KPI taken from the requirement; tick a stage and save to fix them. The KPI
+formula is optional. Existing journeys have an **Edit** link in the table: reorder,
 rename, add or remove stages and save (the journey's file is rewritten from the form). Journeys that contain
 things the form can't preserve (e.g. an unknown property or several journeys in one file) are refused with a clear
 message instead of being changed. Data layer variables are maintained per component, not in this form.
@@ -340,7 +365,7 @@ the field is required. A journey saved before this gets its data view filled in 
 all come from one; otherwise you pick it and fix the stages marked red. In a CSV import, put the ID in an
 optional `data_view` column. The Journeys page shows each journey's data view and can filter by it.
 
-### Shared requirements and KPIs (library)
+### Shared requirements, KPIs and stages (library)
 
 A requirement or KPI that several journeys use is stored once, in `library-instances.ttl` in your data
 directory. Each journey refers to it by URI, the same way journeys share components, so two journeys that
@@ -352,15 +377,33 @@ pick **Create new** to add one to the library. A shared entry's fields are read-
 many journeys that is. Deleting a journey never deletes library entries; an entry that no journey uses stays
 in the library with a usage count of 0.
 
-The Journeys page has a **Shared library** section that lists every requirement and KPI with its usage count,
-and lets you create and edit them there.
+The Journeys page has a **Shared library** section that lists every requirement, KPI and stage with its usage
+count, and lets you create and edit them there.
+
+**Shared stages.** A stage that many journeys reuse (e.g. "Login page" measured by the page-name dimension with
+the value `/login`) can be stored once as well. Its name, component, filter value and entry criteria are
+shared; its **position in the journey** and whether it **rolls up to the KPI** stay with each journey. In the
+journey form:
+- **Add shared stage** adds a stage from the library. Only shared stages whose component fits the journey's
+  data view are offered.
+- A shared stage row is read-only and marked "Shared". **Edit shared stage** unlocks it: saving changes the
+  stage for every journey that uses it, and the form says how many that is. **Detach** turns the row into a
+  stage of this journey only.
+- **Save to library** on any other stage row shares it from then on.
+
+Behind the scenes, each journey keeps its own copy of the stage (so all queries and the graph work as before),
+linked to the library entry by `martech:based_on`. Changing a shared stage rewrites every journey file that
+uses it, all or nothing: the change is refused if it can't be applied to one of them, for example because the
+new component isn't in that journey's data view.
 
 Things to know:
 - Journeys saved before the library existed keep their own requirement and KPI inside their file. The form
   shows them as "This journey only" until you pick a shared entry for them. Merging existing duplicates into
   the library is not automated yet.
-- Journeys generated from a CSV or from Python keep their own requirement and KPI unless their turtle links to
-  library URIs. The form's library picker works on any journey that has been saved through it.
+- Journeys generated from a CSV or from Python keep their own requirement, KPI and stages unless their turtle
+  links to library URIs. The CSV import can't create or link shared stages yet. The form's library pickers
+  work on any journey that has been saved through it.
+- Shared stages can't be deleted yet (the same as requirements and KPIs); an unused one shows "used by 0".
 - The library belongs to your own data. The bundled demo data has no library, and the library refuses
   changes while the workspace is in demo mode.
 
@@ -417,9 +460,10 @@ thing as an `xdm_base_url` argument.
 - ✅ Demo/org mode switcher: every page shows which workspace is active and lets you switch between the
   bundled read-only demo data and your own data directory; Home becomes a live kickstart checklist once
   you're on your own (typically empty) data.
-- ✅ Shared requirement and KPI library (your own data only): requirements and KPIs are reused across
-  journeys by URI, with usage counts and editing on the Journeys page. See
-  [Shared requirements and KPIs](#shared-requirements-and-kpis-library).
+- ✅ Shared requirement, KPI and stage library (your own data only): requirements and KPIs are reused across
+  journeys by URI, and shared stages keep every journey using them in sync (position and KPI roll-up stay per
+  journey), with usage counts and editing on the Journeys page. See
+  [Shared requirements, KPIs and stages](#shared-requirements-kpis-and-stages-library).
 - ✅ Configurable XDM base URL for generated component refs: set your org's real prefix once (Journeys
   page) instead of the `SANDBOX_NAME` placeholder ending up in every generated file.
 - ✅ MCP server (`martech-knowledge-graph mcp`): `run_sparql` + `get_ontology_schema` via FastMCP,
@@ -446,6 +490,8 @@ thing as an `xdm_base_url` argument.
 - ✅ Ontology trimmed to what's actually populated: removed `Feature`/`StageTransition` and their
   properties (declared but never instantiated by anything, including the bundled demo data), and wired up
   `entry_criteria` on `Stage` (was declared but unused) with a real form field.
+- ✅ Component activation: synced components start inactive and are activated when needed; only active ones
+  appear in pickers, the graph, coverage and for agents.
 - ✅ Several data views side by side: CJA connect and sync live on the Sources page (with a Re-sync per data
   view); the Components, Journeys and Graph pages filter by data view; and each journey stores the data
   view it is measured in (`martech:data_view`), with saving refusing components from another data view.

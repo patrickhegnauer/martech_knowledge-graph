@@ -44,7 +44,8 @@ conversations.
 Don't assume the class/property list below is exhaustive or current; it's orientation, not a substitute
 for calling the tool. As of when this skill was written, the core shape was:
 
-- **Classes**: `Requirement`, `KPI`, `Journey`, `Stage`, `Component`, `DataLayerVariable`, `Measurement`.
+- **Classes**: `Requirement`, `KPI`, `Journey`, `Stage`, `SharedStage`, `Component`, `DataLayerVariable`,
+  `Measurement`.
 - **`Measurement`** isn't a "real" business entity; it's an n-ary relation node that exists only
   because a plain RDF predicate can't carry its own attribute (it carries an optional `filter_value`).
   To find what component measures a stage, go
@@ -57,6 +58,15 @@ for calling the tool. As of when this skill was written, the core shape was:
 - **`Journey.data_view`**: the ID of the CJA data view the journey is measured in. All of its CJA
   components come from that data view, so query CJA in that data view when you pull its numbers. Journeys
   saved before this property existed may not have it.
+- **Only active components are in the graph you query.** A CJA data view has many more components; the ones
+  not activated (and not used by any journey) are left out on purpose. If a user asks about a CJA component
+  you can't find, it most likely exists in CJA but hasn't been activated and curated here yet; say so rather
+  than guessing its meaning.
+- **`SharedStage`** and **`Stage.based_on`**: a stage reused by several journeys is defined once as a
+  `SharedStage` in the library, and each journey's own `Stage` points at it with `based_on`. The journey
+  stage already carries the same name, entry criteria and measuring component, so walk journeys through
+  their own stages as usual; use `based_on` only to find which journeys share a stage. A `SharedStage` has
+  no `order` and no KPI roll-up, and isn't a `Stage`, so `?s a martech:Stage` never matches it.
 - Namespace: `https://example.org/martech/ontology/` (prefix `martech:` in examples below). This is a
   placeholder base URI in the public template; a real org deployment may have swapped in their own.
   `get_ontology_schema()` tells you the truth regardless.

@@ -342,6 +342,9 @@ nav.site-nav li.active a::before {
 
 .app-main > main {
   flex: 1;
+  /* Auto side margins would otherwise size main to its content (up to max-width), wider than the space
+     next to the sidebar, so wide pages ran off the right edge on mid-sized windows. */
+  width: 100%;
 }
 
 .sidebar-toggle {
@@ -417,6 +420,17 @@ main.wide {
   min-width: 860px;
 }
 
+/* Fixed-layout tables keep their column widths, so long headers wrap instead of running into the next one. */
+.table-fixed th {
+  white-space: normal;
+}
+
+/* Nine columns: below this width the table scrolls sideways instead of squeezing them. */
+#table-components {
+  min-width: 1150px;
+}
+
+td.cell-wrap,
 .table-fixed td.cell-wrap {
   white-space: normal;
   overflow-wrap: anywhere;
@@ -576,6 +590,79 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* Compact buttons for table rows and inline controls. */
+button.btn-sm, a.btn.btn-sm {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+/* A button label never breaks over several lines; the button moves to the next line instead. */
+button, .btn {
+  white-space: nowrap;
+}
+
+/* A row of buttons (and an optional select or status message) with even spacing. */
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 1rem 0;
+}
+
+.button-row > select {
+  width: auto;
+  flex: 0 1 24rem;
+  min-width: 12rem;
+}
+
+.button-row > .note {
+  margin: 0;
+}
+
+/* Buttons and links in a table's action cell. */
+.row-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* Journey form: stage table rows, with the shared-stage line under the stage name. */
+#table-stages td {
+  vertical-align: top;
+}
+
+#table-stages td input[type="checkbox"] {
+  margin-top: 0.6rem;
+}
+
+.stage-shared-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  white-space: normal;
+}
+
+.stage-shared-buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.stage-shared-line:empty {
+  display: none;
+}
+
+.stage-shared-line.is-warning {
+  color: var(--danger-text);
+}
+
 input[type="text"], input[type="search"], input[type="password"], input[type="file"], select, textarea {
   padding: 0.5rem 0.65rem;
   border: 1px solid var(--border);
@@ -669,6 +756,7 @@ form.field-form label {
   --type-kpi: #5DCAA5;
   --type-journey: #EF9F27;
   --type-stage: #F0997B;
+  --type-sharedstage: #F7C6A9;
   --type-component: #7F77DD;
   --type-datalayervariable: #ED93B1;
   --type-measurement: #B4B2A9;
@@ -683,6 +771,7 @@ form.field-form label {
   font-size: 0.72rem;
   font-weight: 600;
   white-space: nowrap;
+  vertical-align: middle;
 }
 
 .type-pill::before {
@@ -698,6 +787,7 @@ form.field-form label {
 .type-pill.type-kpi { color: var(--type-kpi); background: color-mix(in srgb, var(--type-kpi) 16%, var(--surface)); }
 .type-pill.type-journey { color: var(--type-journey); background: color-mix(in srgb, var(--type-journey) 16%, var(--surface)); }
 .type-pill.type-stage { color: var(--type-stage); background: color-mix(in srgb, var(--type-stage) 16%, var(--surface)); }
+.type-pill.type-sharedstage { color: var(--type-sharedstage); background: color-mix(in srgb, var(--type-sharedstage) 16%, var(--surface)); }
 .type-pill.type-datalayervariable { color: var(--type-datalayervariable); background: color-mix(in srgb, var(--type-datalayervariable) 16%, var(--surface)); }
 .type-pill.type-measurement { color: var(--type-measurement); background: color-mix(in srgb, var(--type-measurement) 16%, var(--surface)); }
 

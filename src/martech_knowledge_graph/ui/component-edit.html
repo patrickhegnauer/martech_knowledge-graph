@@ -34,20 +34,21 @@
 <div class="app-main">
 <main>
   <section>
-    <h2 id="page-title">Edit Component: Product views</h2>
+    <h2 id="page-title">Edit Component</h2>
     <p><a href="components.html">&larr; Back to components</a></p>
-    <p class="note" id="live-mode-note">Checking for a local API…</p>
+    <p class="note" id="live-mode-note">Loading component…</p>
 
+    <div id="component-body" hidden>
     <div class="readonly-block">
       <h3>From CJA (read-only)</h3>
       <dl>
-        <dt>Name</dt><dd id="ro-name">Product views</dd>
-        <dt>CJA Component ID</dt><dd id="ro-cja-id">cja:metrics/productViews</dd>
+        <dt>Name</dt><dd id="ro-name"></dd>
+        <dt>CJA Component ID</dt><dd id="ro-cja-id"></dd>
         <!-- no ontology counterpart: CJA-side identifier only, not persisted as a triple -->
-        <dt>Type</dt><dd id="ro-type">metric</dd>
-        <dt>Data view</dt><dd id="ro-dataview">Production - Website</dd>
+        <dt>Type</dt><dd id="ro-type"></dd>
+        <dt>Data view</dt><dd id="ro-dataview"></dd>
         <!-- no ontology counterpart: not present anywhere in martech-ontology.ttl; always a placeholder, live or not -->
-        <dt>CJA description</dt><dd id="ro-description">Count of product detail page view events, as defined in the CJA semantic layer.</dd>
+        <dt>CJA description</dt><dd id="ro-description"></dd>
         <!-- no ontology counterpart: distinct from the curated "definition" field below; shown for reference only, never written to the graph -->
       </dl>
       <!-- WIRE: refresh this read-only block from the CJA semantic layer | reuses: CJA Semantic Layer MCP -->
@@ -55,16 +56,16 @@
 
     <form id="form-component-context" class="field-form" action="#" method="post">
       <label for="field-definition">Definition (martech:definition)</label>
-      <textarea id="field-definition" name="definition" rows="2">Number of times a product detail page was viewed.</textarea>
+      <textarea id="field-definition" name="definition" rows="2"></textarea>
 
       <label for="field-caveats">Caveats (martech:caveats)</label>
-      <textarea id="field-caveats" name="caveats" rows="2">Counts page views, not unique visitors — a visitor viewing the same product twice counts twice.</textarea>
+      <textarea id="field-caveats" name="caveats" rows="2"></textarea>
 
       <label for="field-context">Context (martech:context)</label>
-      <textarea id="field-context" name="context" rows="2">Entry point for the purchase funnel; used to benchmark top-of-funnel demand.</textarea>
+      <textarea id="field-context" name="context" rows="2"></textarea>
 
       <label for="field-owner">Owner (martech:owner)</label>
-      <input type="text" id="field-owner" name="owner" value="Digital Analytics">
+      <input type="text" id="field-owner" name="owner">
 
       <h3>Governance</h3>
       <label><input type="checkbox" id="field-is-pii" name="is_pii"> Carries or is derived from PII (martech:is_pii)</label>
@@ -79,16 +80,7 @@
           <thead>
             <tr><th>Label</th><th>Identifier / URL</th></tr>
           </thead>
-          <tbody id="refs-tbody">
-            <tr data-ref-index="0">
-              <td><input type="text" name="refs_label" value="AEP XDM field"></td>
-              <td><input type="text" name="refs" value="https://sandbox/champion/xdm/commerce.productViews.value"></td>
-            </tr>
-            <tr data-ref-index="1">
-              <td><input type="text" name="refs_label" value="CJA component definition"></td>
-              <td><input type="text" name="refs" value="https://experience.adobe.com/cja/#/components/metrics/productViews"></td>
-            </tr>
-          </tbody>
+          <tbody id="refs-tbody"></tbody>
         </table>
 
       </div>
@@ -107,36 +99,23 @@
       <datalist id="dlv-suggestions"></datalist>
       <button type="button" id="btn-add-dlv" class="secondary">Add Data Layer Variable</button>
 
-      <p>
+      <p class="button-row">
         <button type="button" id="btn-save-component">Save</button>
         <span id="save-status" class="note" style="display:none;"></span>
       </p>
     </form>
+    </div>
   </section>
 
-  <section>
+  <section id="preview-section" hidden>
     <h3>Generated turtle preview</h3>
     <div class="panel">
-      <pre class="code-block" id="turtle-preview">
-@prefix martech: &lt;https://example.org/martech/ontology/&gt; .
-@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
-@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
-
-martech:component_product_views
-  a martech:Component ;
-  rdfs:label "Product views" ;
-  martech:component_type "metric" ;
-  martech:definition "Number of times a product detail page was viewed." ;
-  martech:caveats "Counts page views, not unique visitors — a visitor viewing the same product twice counts twice." ;
-  martech:context "Entry point for the purchase funnel; used to benchmark top-of-funnel demand." ;
-  martech:owner "Digital Analytics" ;
-  martech:refs &lt;https://sandbox/champion/xdm/commerce.productViews.value&gt; .
-      </pre>
+      <pre class="code-block" id="turtle-preview"></pre>
     </div>
-    <p class="note">This preview is regenerated from the server's response after Save. It's the actual turtle now saved for this component, not a static example, whenever the local API is reachable.</p>
+    <p class="note">The turtle now saved for this component, as the server wrote it.</p>
   </section>
 </main>
-<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running; see components.html for setup. Falls back to a static example otherwise.</footer>
+<footer class="site-footer">This page talks to the local API (started via `martech-knowledge-graph serve`) when it's running; see components.html for setup.</footer>
 </div>
 </div>
 
@@ -148,9 +127,15 @@ function addRefRow(label, url) {
   const tbody = document.getElementById("refs-tbody");
   const tr = document.createElement("tr");
   tr.dataset.refIndex = String(tbody.children.length);
-  tr.innerHTML =
-    '<td><input type="text" name="refs_label" value="' + (label || "") + '"></td>' +
-    '<td><input type="text" name="refs" value="' + (url || "") + '"></td>';
+  [["refs_label", label], ["refs", url]].forEach(([name, value]) => {
+    const td = document.createElement("td");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.name = name;
+    input.value = value || "";
+    td.appendChild(input);
+    tr.appendChild(td);
+  });
   tbody.appendChild(tr);
 }
 
@@ -222,14 +207,16 @@ if (componentKey) {
         opt.value = n;
         suggestions.appendChild(opt);
       });
+      document.getElementById("component-body").hidden = false;
     })
     .catch(() => {
       document.getElementById("live-mode-note").textContent =
-        "Could not load component '" + componentKey + "' from the local API. Showing the static example instead.";
+        "Could not load component '" + componentKey + "' from the local API. Nothing is shown, so nothing can be saved by mistake.";
+      document.getElementById("live-mode-note").classList.add("note-error");
     });
 } else {
   document.getElementById("live-mode-note").textContent =
-    "No component selected (open this page via a table's Edit link). Showing the static example.";
+    "No component selected. Open this page with a component's Edit link on the Components page.";
 }
 
 document.getElementById("btn-save-component").addEventListener("click", () => {
@@ -271,6 +258,7 @@ document.getElementById("btn-save-component").addEventListener("click", () => {
       if (!ok) throw new Error(data.error || "save failed");
       statusEl.textContent = "Saved.";
       document.getElementById("turtle-preview").textContent = data.turtle;
+      document.getElementById("preview-section").hidden = false;
     })
     .catch(err => {
       statusEl.textContent = "Save failed: " + err.message;

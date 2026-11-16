@@ -25,6 +25,9 @@ martech:Journey a rdfs:Class ;
 martech:Stage a rdfs:Class ;
     rdfs:comment "An ordered step within a journey." .
 
+martech:SharedStage a rdfs:Class ;
+    rdfs:comment "A stage defined once in the shared library (name, entry criteria, and the component that measures it) and reused by several journeys. Each journey still has its own Stage, with its own order and KPI roll-up, linked to this one by based_on and kept in sync with it." .
+
 martech:Component a rdfs:Class ;
     rdfs:comment "A metric or dimension from the semantic layer (CJA Semantic Layer MCP). Identity is authoritative in AEP; business meaning (definition, caveats, context) is curated here." .
 
@@ -58,6 +61,11 @@ martech:has_stage a rdf:Property ;
     rdfs:range martech:Stage ;
     rdfs:comment "Links a journey to one of its ordered stages." .
 
+martech:based_on a rdf:Property ;
+    rdfs:domain martech:Stage ;
+    rdfs:range martech:SharedStage ;
+    rdfs:comment "The shared library stage this journey stage is kept in sync with. The journey stage carries the same name, entry criteria and measuring component; only its order and KPI roll-up are its own." .
+
 martech:rolls_up_to a rdf:Property ;
     rdfs:domain martech:Stage ;
     rdfs:range martech:KPI ;
@@ -80,7 +88,7 @@ martech:refs a rdf:Property ;
 martech:measured_entity a rdf:Property ;
     rdfs:domain martech:Measurement ;
     rdfs:range rdfs:Resource ;
-    rdfs:comment "The Stage being measured." .
+    rdfs:comment "The Stage (or SharedStage) being measured." .
 
 martech:measured_component a rdf:Property ;
     rdfs:domain martech:Measurement ;
@@ -104,7 +112,7 @@ martech:status a rdf:Property ;
 martech:formula a rdf:Property ;
     rdfs:domain martech:KPI ;
     rdfs:range xsd:string ;
-    rdfs:comment "The formula or definition of a KPI." .
+    rdfs:comment "Optional. The formula or definition of a KPI." .
 
 martech:target a rdf:Property ;
     rdfs:domain martech:KPI ;
@@ -145,6 +153,11 @@ martech:component_type a rdf:Property ;
     rdfs:domain martech:Component ;
     rdfs:range xsd:string ;
     rdfs:comment "Whether the component is a metric or a dimension." .
+
+martech:active a rdf:Property ;
+    rdfs:domain martech:Component ;
+    rdfs:range xsd:boolean ;
+    rdfs:comment "Whether the component is in use for curation, journeys and agents. A component measured by a stage is always active. Otherwise this flag decides; without it, a component counts as active once it has curated context (definition, caveats, context or owner). CJA sync adds new components as inactive. Inactive components are kept in the data but hidden from pickers, the graph view and agents." .
 
 martech:is_pii a rdf:Property ;
     rdfs:domain martech:Component ;

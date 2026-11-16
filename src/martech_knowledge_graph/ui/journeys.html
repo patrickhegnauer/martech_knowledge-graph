@@ -61,7 +61,9 @@
             <th></th>
           </tr>
         </thead>
-        <tbody id="journeys-tbody">
+        <!-- Static sample row, shown only when the local API can't be reached; hidden until then so it never
+             flashes before the real journeys load. -->
+        <tbody id="journeys-tbody" hidden>
           <tr data-journey-slug="ecommerce">
             <td>Ecommerce purchase journey</td>
             <td>—</td>
@@ -89,7 +91,7 @@
 
   <section>
     <h2>Shared library</h2>
-    <p>Requirements and KPIs that several journeys use. Each is stored once, so changing it here changes every journey that uses it. Deleting a journey never deletes its library entries; an entry no journey uses stays here with a count of 0. The library belongs to your own data; the demo data is read-only and has none.</p>
+    <p>Requirements, KPIs and stages that several journeys use. Each is stored once, so changing it here changes every journey that uses it. A shared stage keeps its position and its KPI roll-up per journey; only its name, component, filter value and entry criteria are shared. Deleting a journey never deletes its library entries; an entry no journey uses stays here with a count of 0. The library belongs to your own data; the demo data is read-only and has none.</p>
     <p class="note" id="library-note">Loading the library…</p>
 
     <h3>Requirements</h3>
@@ -110,22 +112,43 @@
     </div>
     <p><button type="button" class="secondary" id="btn-new-kpi">New KPI</button></p>
 
+    <h3>Stages</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Stage</th><th>Component</th><th>Filter value</th><th>Entry criteria</th><th>Data view</th><th>Used by</th><th></th></tr></thead>
+        <tbody id="library-stages-tbody"></tbody>
+      </table>
+    </div>
+    <p><button type="button" class="secondary" id="btn-new-stage">New shared stage</button></p>
+    <datalist id="lib-components-list"></datalist>
+
     <div class="panel" id="library-editor" hidden>
       <h3 id="library-editor-title"></h3>
       <label for="lib-label">Name</label>
       <input type="text" id="lib-label" autocomplete="off">
       <div id="lib-kpi-fields" hidden>
-        <label for="lib-formula">Formula</label>
+        <label for="lib-formula">Formula (optional)</label>
         <input type="text" id="lib-formula" autocomplete="off">
         <label for="lib-owner">KPI owner</label>
         <input type="text" id="lib-owner" autocomplete="off">
         <label for="lib-target">Target (number, optional)</label>
         <input type="text" id="lib-target" autocomplete="off">
       </div>
-      <label for="lib-comment" id="lib-comment-label">Description</label>
-      <textarea id="lib-comment" rows="2"></textarea>
+      <div id="lib-stage-fields" hidden>
+        <label for="lib-component">Component</label>
+        <input type="text" id="lib-component" autocomplete="off" list="lib-components-list" placeholder="Type to search components…">
+        <p class="note">Only active components are listed. Missing one? <a href="components.html?show=inactive">Activate it on the Components page</a>.</p>
+        <label for="lib-filter">Filter value (optional)</label>
+        <input type="text" id="lib-filter" autocomplete="off">
+        <label for="lib-entry-criteria">Entry criteria (optional)</label>
+        <input type="text" id="lib-entry-criteria" autocomplete="off">
+      </div>
+      <div id="lib-comment-field">
+        <label for="lib-comment" id="lib-comment-label">Description</label>
+        <textarea id="lib-comment" rows="2"></textarea>
+      </div>
       <p class="note" id="library-editor-warning"></p>
-      <p>
+      <p class="button-row">
         <button type="button" id="btn-library-save">Save</button>
         <button type="button" class="secondary" id="btn-library-cancel">Cancel</button>
         <span id="library-status" class="note" style="display:none;"></span>
@@ -140,7 +163,7 @@
       <input type="text" id="field-xdm-base-url" placeholder="https://sandbox/SANDBOX_NAME/xdm/">
       <p class="note">Every component's <code>component_xdm_path</code> column (e.g. <code>commerce.checkouts.value</code>) gets appended to this prefix to build its <code>martech:refs</code> URI when you click Generate turtle. Set this to your org's real AEP sandbox once. It's just a prefix string, not validated against Adobe's actual URL scheme. Changing it only affects journeys generated <em>after</em> the change; existing files keep whatever refs they already have.</p>
       <p id="xdm-base-url-example" class="note"></p>
-      <p>
+      <p class="button-row">
         <button type="button" id="btn-save-settings" class="secondary">Save</button>
         <span id="settings-status" class="note" style="display:none;"></span>
       </p>
@@ -156,7 +179,7 @@
       <p>Or paste CSV content:</p>
       <textarea id="textarea-journey-csv" rows="6" placeholder="Paste CSV rows here"></textarea>
 
-      <p>
+      <p class="button-row">
         <button type="button" id="btn-validate-csv" class="secondary">Validate</button>
         <button type="button" id="btn-generate-turtle">Generate turtle</button>
       </p>
@@ -255,28 +278,33 @@ function renderJourneysTable(journeys, dataViews) {
   renderJourneyFilter(journeys, dataViews || []);
   const tbody = document.getElementById("journeys-tbody");
   tbody.innerHTML = "";
+  tbody.hidden = false;
   journeys.forEach(j => {
     const tr = document.createElement("tr");
     tr.dataset.journeySlug = j.slug;
     tr.dataset.dataView = j.data_view || "";
     const dvText = j.data_view ? (j.data_view_name ? j.data_view_name + " (" + j.data_view + ")" : j.data_view) : "—";
-    [j.label, dvText, j.requirement || "—", String(j.stages), String(j.kpis), j.last_generated].forEach(text => {
+    [j.label, dvText, j.requirement || "—", String(j.stages), String(j.kpis), j.last_generated].forEach((text, i) => {
       const td = document.createElement("td");
       td.textContent = text;
+      if (i < 3) td.className = "cell-wrap";   // names and the long data view text wrap, so the actions stay visible
       tr.appendChild(td);
     });
     const actionTd = document.createElement("td");
+    const actions = document.createElement("div");
+    actions.className = "row-actions";
+    actionTd.appendChild(actions);
     const a = document.createElement("a");
     a.href = "journey-edit.html?slug=" + encodeURIComponent(j.slug);
+    a.className = "btn secondary btn-sm";
     a.textContent = "Edit";
-    actionTd.appendChild(a);
-    actionTd.appendChild(document.createTextNode(" "));
+    actions.appendChild(a);
     const del = document.createElement("button");
     del.type = "button";
-    del.className = "secondary";
+    del.className = "secondary btn-sm";
     del.textContent = "Delete";
     del.addEventListener("click", () => deleteJourney(j.slug, j.label));
-    actionTd.appendChild(del);
+    actions.appendChild(del);
     tr.appendChild(actionTd);
     tbody.appendChild(tr);
   });
@@ -304,15 +332,46 @@ function loadLiveJourneys() {
       note.textContent = "Live data: " + data.journeys.length + " journey file(s).";
     })
     .catch(() => {
+      document.getElementById("journeys-tbody").hidden = false;
       note.textContent = "Showing static sample data. Start the local API (`martech-knowledge-graph serve`) for live data.";
     });
 }
 loadLiveJourneys();
 
-// Shared library: requirements and KPIs that journeys reference. Edits here change every journey that uses
-// the entry, so the editor says how many journeys that is before saving.
-let library = { requirements: [], kpis: [] };
-let libraryEditing = null;   // {kind: "requirement" | "kpi", id: "" for a new entry}
+// Shared library: requirements, KPIs and stages that journeys reference. Edits here change every journey that
+// uses the entry, so the editor says how many journeys that is before saving.
+let library = { requirements: [], kpis: [], stages: [] };
+let libraryEditing = null;   // {kind: "requirement" | "kpi" | "stage", id: "" for a new entry}
+const LIBRARY_PILLS = { requirement: "Requirement", kpi: "KPI", stage: "Stage" };
+const libComponentByLabel = {};  // component datalist text -> key
+const libLabelByKey = {};        // component key -> datalist text
+let dataViewNames = {};          // data view id -> name
+
+function loadLibraryComponents() {
+  return fetch("/api/state")
+    .then(r => { if (!r.ok) throw new Error("bad response"); return r.json(); })
+    .then(data => {
+      const list = document.getElementById("lib-components-list");
+      list.innerHTML = "";
+      (data.data_views || []).forEach(dv => { dataViewNames[dv.id] = dv.name; });
+      data.components.forEach(c => {
+        let text = c.name + " · " + (c.cja_id || c.key);
+        if (libComponentByLabel[text]) text += " [" + c.key + "]";
+        libComponentByLabel[text] = c.key;
+        libLabelByKey[c.key] = text;
+        if (c.active === false) return;   // only active components are offered
+        const opt = document.createElement("option");
+        opt.value = text;
+        list.appendChild(opt);
+      });
+    })
+    .catch(() => {});
+}
+
+function dataViewText(ids) {
+  if (!ids || !ids.length) return "any (not from CJA)";
+  return ids.map(id => dataViewNames[id] ? dataViewNames[id] + " (" + id + ")" : id).join(", ");
+}
 
 function libraryCell(text) {
   const td = document.createElement("td");
@@ -324,7 +383,7 @@ function libraryNameCell(text, pillType) {
   const td = document.createElement("td");
   const pill = document.createElement("span");
   pill.className = "type-pill type-" + pillType;
-  pill.textContent = pillType === "kpi" ? "KPI" : "Requirement";
+  pill.textContent = LIBRARY_PILLS[pillType];
   td.appendChild(pill);
   td.appendChild(document.createTextNode(" " + text));
   return td;
@@ -337,7 +396,7 @@ function libraryRow(tbody, pillType, cells, onEdit) {
   const actionTd = document.createElement("td");
   const edit = document.createElement("button");
   edit.type = "button";
-  edit.className = "secondary";
+  edit.className = "secondary btn-sm";
   edit.textContent = "Edit";
   edit.addEventListener("click", onEdit);
   actionTd.appendChild(edit);
@@ -348,11 +407,16 @@ function libraryRow(tbody, pillType, cells, onEdit) {
 function renderLibrary() {
   const reqBody = document.getElementById("library-requirements-tbody");
   const kpiBody = document.getElementById("library-kpis-tbody");
+  const stageBody = document.getElementById("library-stages-tbody");
   reqBody.innerHTML = "";
   kpiBody.innerHTML = "";
+  stageBody.innerHTML = "";
+  (library.stages || []).forEach(e => libraryRow(stageBody, "stage", [e.label, e.component_label, e.filter_value || "not set",
+    e.entry_criteria || "not set", dataViewText(e.data_views), String(e.usage)],
+    () => openLibraryEditor("stage", e)));
   library.requirements.forEach(e => libraryRow(reqBody, "requirement", [e.label, e.comment || "not set", String(e.usage)],
     () => openLibraryEditor("requirement", e)));
-  library.kpis.forEach(e => libraryRow(kpiBody, "kpi", [e.label, e.formula, e.owner,
+  library.kpis.forEach(e => libraryRow(kpiBody, "kpi", [e.label, e.formula || "not set", e.owner,
     e.target === null || e.target === undefined ? "not set" : String(e.target), String(e.usage)],
     () => openLibraryEditor("kpi", e)));
 }
@@ -364,9 +428,9 @@ function loadLibrary() {
     .then(data => {
       library = data;
       renderLibrary();
-      const reqs = data.requirements.length, kpis = data.kpis.length;
-      note.textContent = reqs || kpis
-        ? "Live data: " + reqs + " requirement(s), " + kpis + " KPI(s)."
+      const reqs = data.requirements.length, kpis = data.kpis.length, stages = (data.stages || []).length;
+      note.textContent = reqs || kpis || stages
+        ? "Live data: " + reqs + " requirement(s), " + kpis + " KPI(s), " + stages + " stage(s)."
         : "No shared entries yet. Create them here, or pick \"Create new\" in a journey's form.";
     })
     .catch(() => {
@@ -376,10 +440,16 @@ function loadLibrary() {
 
 function openLibraryEditor(kind, entry) {
   libraryEditing = { kind: kind, id: entry ? entry.id : "" };
-  const isKpi = kind === "kpi";
+  const isKpi = kind === "kpi", isStage = kind === "stage";
   document.getElementById("library-editor-title").textContent =
-    (entry ? "Edit " : "New ") + (isKpi ? "KPI" : "requirement");
+    (entry ? "Edit " : "New ") + (isKpi ? "KPI" : isStage ? "shared stage" : "requirement");
   document.getElementById("lib-kpi-fields").hidden = !isKpi;
+  document.getElementById("lib-stage-fields").hidden = !isStage;
+  document.getElementById("lib-comment-field").hidden = isStage;
+  document.getElementById("lib-component").value = entry && entry.component_key
+    ? (libLabelByKey[entry.component_key] || entry.component_key) : "";
+  document.getElementById("lib-filter").value = entry ? (entry.filter_value || "") : "";
+  document.getElementById("lib-entry-criteria").value = entry ? (entry.entry_criteria || "") : "";
   document.getElementById("lib-comment-label").textContent = isKpi ? "Note (optional)" : "Description";
   document.getElementById("lib-label").value = entry ? entry.label : "";
   document.getElementById("lib-formula").value = entry && entry.formula ? entry.formula : "";
@@ -389,6 +459,9 @@ function openLibraryEditor(kind, entry) {
   const warning = document.getElementById("library-editor-warning");
   if (!entry) {
     warning.textContent = "A new entry. Journeys can pick it from their form.";
+  } else if (isStage && entry.usage > 0) {
+    warning.textContent = "Used by " + entry.usage + (entry.usage === 1 ? " journey" : " journeys") +
+      ". Saving rewrites every one of them with the new values; their stage positions and KPI roll-ups stay as they are.";
   } else if (entry.usage > 0) {
     warning.textContent = "Used by " + entry.usage + (entry.usage === 1 ? " journey" : " journeys") +
       ". Saving changes every one of them.";
@@ -413,6 +486,7 @@ function showLibraryStatus(text) {
 
 document.getElementById("btn-new-requirement").addEventListener("click", () => openLibraryEditor("requirement", null));
 document.getElementById("btn-new-kpi").addEventListener("click", () => openLibraryEditor("kpi", null));
+document.getElementById("btn-new-stage").addEventListener("click", () => openLibraryEditor("stage", null));
 document.getElementById("btn-library-cancel").addEventListener("click", closeLibraryEditor);
 
 document.getElementById("btn-library-save").addEventListener("click", () => {
@@ -425,6 +499,12 @@ document.getElementById("btn-library-save").addEventListener("click", () => {
     body.formula = document.getElementById("lib-formula").value;
     body.owner = document.getElementById("lib-owner").value;
     body.target = document.getElementById("lib-target").value;
+  }
+  if (libraryEditing.kind === "stage") {
+    const text = document.getElementById("lib-component").value.trim();
+    body.component_key = libComponentByLabel[text] || (libLabelByKey[text] ? text : "");
+    body.filter_value = document.getElementById("lib-filter").value;
+    body.entry_criteria = document.getElementById("lib-entry-criteria").value;
   }
   const path = "/api/library/" + libraryEditing.kind +
     (libraryEditing.id ? "/" + encodeURIComponent(libraryEditing.id) : "");
@@ -439,11 +519,16 @@ document.getElementById("btn-library-save").addEventListener("click", () => {
       if (!ok) throw new Error(data.error || "save failed");
       closeLibraryEditor();
       loadLibrary();
+      if ((data.updated_journeys || []).length) {
+        document.getElementById("library-note").textContent =
+          "Saved. Updated " + data.updated_journeys.length + " journey(s): " + data.updated_journeys.join(", ") + ".";
+        loadLiveJourneys();
+      }
     })
     .catch(err => showLibraryStatus("Could not save (" + err.message + ")."));
 });
 
-loadLibrary();
+loadLibraryComponents().then(loadLibrary);
 
 function updateXdmExample() {
   const base = document.getElementById("field-xdm-base-url").value || "";

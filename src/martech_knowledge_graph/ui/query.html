@@ -81,15 +81,16 @@ SELECT ?label ?definition ?caveats ?owner WHERE {
             <dt><span class="type-pill type-kpi">KPI</span></dt><dd>Measurable objective addressing a requirement.</dd>
             <dt><span class="type-pill type-journey">Journey</span></dt><dd>Named end-to-end customer path.</dd>
             <dt><span class="type-pill type-stage">Stage</span></dt><dd>Ordered step within a journey.</dd>
+            <dt><span class="type-pill type-sharedstage">SharedStage</span></dt><dd>Library stage several journeys reuse; their stages are based_on it.</dd>
             <dt><span class="type-pill type-component">Component</span></dt><dd>Metric or dimension from the semantic layer.</dd>
             <dt><span class="type-pill type-datalayervariable">DataLayerVariable</span></dt><dd>Raw implementation artifact.</dd>
             <dt><span class="type-pill type-measurement">Measurement</span></dt><dd>"measured_by" relation between a Stage and a Component.</dd>
           </dl>
           <p><strong>Properties</strong></p>
           <dl>
-            <dt>addressed_by, has_stage, rolls_up_to, maps_to, refs</dt><dd>object properties</dd>
+            <dt>addressed_by, has_stage, rolls_up_to, based_on, maps_to, refs</dt><dd>object properties</dd>
             <dt>measured_entity, measured_component, filter_value</dt><dd>n-ary relation properties</dd>
-            <dt>status, formula, target, order, entry_criteria, data_view, definition, caveats, context, component_type, is_pii, governance_notes, source_system, owner</dt><dd>datatype (literal) properties</dd>
+            <dt>status, formula, target, order, entry_criteria, data_view, definition, caveats, context, component_type, active, is_pii, governance_notes, source_system, owner</dt><dd>datatype (literal) properties</dd>
           </dl>
         </div>
       </div>

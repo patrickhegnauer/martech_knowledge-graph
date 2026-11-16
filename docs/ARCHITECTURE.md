@@ -13,7 +13,7 @@ module by module and page by page.
 - [CJA sync](#cja-sync)
 - [Components](#components)
 - [Journeys](#journeys)
-- [Shared requirement and KPI library](#shared-requirement-and-kpi-library)
+- [Shared requirement, KPI and stage library](#shared-requirement-kpi-and-stage-library)
 - [Graph and Query pages](#graph-and-query-pages)
 - [MCP server](#mcp-server)
 - [Skills and the plugin marketplace](#skills-and-the-plugin-marketplace)
@@ -66,7 +66,7 @@ Files in an org data directory:
 |---|---|---|
 | `components-instances.ttl` | CJA sync | Synced components not bound to a journey |
 | `datalayer-instances.ttl` | Component edit page | Data layer variables and their `maps_to` links |
-| `library-instances.ttl` | Journeys page, journey form | Shared requirements and KPIs |
+| `library-instances.ttl` | Journeys page, journey form | Shared requirements, KPIs and stages |
 | `<slug>-instances.ttl` | Journey form, CSV import | One journey each |
 | `skills/<slug>.md` | Skills page | Generated skill drafts |
 | `.mkg-mode` | Mode switcher | `demo` or `org` |
@@ -123,7 +123,8 @@ Pages call the API with relative `fetch("/api/...")` URLs. It reuses `graph_expl
 | `/api/mode` | POST | Mode switcher |
 | `/api/settings` | GET, POST | XDM base URL on the Journeys page |
 | `/api/components/<key>` | GET | Component edit page |
-| `/api/components/<key>/context` | POST | Component edit page: save |
+| `/api/components/<key>/context` | POST | Component edit page: save (also activates the component) |
+| `/api/components/activation` | POST | Components page: activate / deactivate one or many |
 | `/api/cja/config` | GET, POST, DELETE | CJA connect dialog |
 | `/api/cja/dataviews` | GET | CJA connect dialog |
 | `/api/cja/sync` | POST | Sources page: sync dialog and per-data-view Re-sync |
@@ -193,7 +194,21 @@ if CJA can't be reached, the page shows the ID alone.
   under each data view they reference, and "Not from CJA" lists components without a `urn:cja:` ref.
   Columns have fixed widths with `.cell-truncate`, so long CJA IDs never push the Edit column off-screen.
   Context coverage counts all rows of the selected data view, ignoring search and the type filter.
-  `component_summary()` in `server.py` supplies the per-row fields.
+  `component_summary()` in `server.py` supplies the per-row fields. Its `journeys` field (`[{slug, label}]`)
+  comes from `journeys_by_component()`, which walks each journey file's own `has_stage` → `Measurement` →
+  `measured_component`, so a shared stage in the library doesn't count as a use. It feeds the "Used in
+  journeys" column and the used/unused filter.
+- **Activation.** One rule in `graph_explorer.py` (`inactive_components()`): a component measured by any
+  Measurement (journey or shared stage) is active; otherwise `martech:active` decides; without the flag, a
+  component is active once it has a non-empty definition, caveats, context or owner. This way components
+  synced before the flag existed, and the demo data, need no rewrite. CJA sync writes `active false` on new
+  nodes; saving context writes `active true`; `POST /api/components/activation` (`{keys, active}`) flips
+  many at once, writing each file once and skipping used components on deactivate.
+  - The UI hides inactive components: Components page default filter, journey and shared-stage datalists,
+    graph viewer (unless "Show inactive components"), context coverage.
+  - Agents never see them: `without_inactive_components()` is applied in `mcp_server.load_active_graph()`,
+    skill generation, `build_plugin()` (snapshot, and `filtered_instance_text()` for reference files) and
+    `export_mcp_project()`. Files without inactive components are copied as they are.
 - **Data layer variables** are stored in `datalayer-instances.ttl`, separate from journey files, so
   regenerating a journey never overwrites a mapping.
   - A name that already exists as a `DataLayerVariable` anywhere is reused; only a new `maps_to` is written.
@@ -207,7 +222,10 @@ Three ways to author a journey, all through `journey_builder.py`:
 
 - **Journey form** (`journey-edit.html`, reached from New journey / Edit): posts to `/api/journeys/save`.
   It validates required fields, slug format (`[a-z0-9][a-z0-9_-]*`, not reserved), a numeric target, at
-  least one stage, and that every component exists. `new` refuses an existing slug (409). Stage order is
+  least one stage, at least one stage that rolls up to the KPI (`ROLL_UP_REQUIRED`, also checked by CSV
+  import), and that every component exists. The KPI formula is optional (omitted from the Turtle when empty).
+  `new` refuses an existing slug (409). If a journey can't be loaded, the form hides itself and shows the
+  server's reason in a red panel, so a failed load never looks like an empty journey. Stage order is
   row order; stage keys are slugified labels that stay stable when a stage is renamed.
 - **CSV import** on the Journeys page (`/api/journeys/generate`), and `build_journey_from_csv()` /
   `build_journey_turtle()` from Python.
@@ -219,7 +237,9 @@ Design points:
 - **Editing is a reverse parse.** `journey_from_graph()` is the inverse of `build_journey_turtle()`. A
   file containing anything the builder can't write back (unknown classes or properties, several journeys,
   a stage without exactly one measurement) is refused with HTTP 409 and the reason, instead of being
-  rewritten lossily. `_ROUND_TRIP_PREDICATES` is the allow-list.
+  rewritten lossily. `_ROUND_TRIP_PREDICATES` is the allow-list. `journey_core()` finds the KPI through the
+  stages' `rolls_up_to`; for older files where no stage rolls up, it falls back to the file's single
+  `addressed_by` KPI, so those journeys open again.
 - A journey's own legacy inline components and data layer variable are re-emitted verbatim, so editing
   never drops curated content.
 - `entry_criteria` (per stage) is carried by the form, the CSV columns and the reverse parser.
@@ -241,7 +261,7 @@ Design points:
 - **Delete** removes `<slug>-instances.ttl`, including any inline components it defined. Nothing outside a
   journey references its own nodes, so there are no dangling references to clean up.
 
-## Shared requirement and KPI library
+## Shared requirement, KPI and stage library
 
 `library.py` reads and writes `library-instances.ttl` (org mode only). Entries are plain dicts so the API and
 the form never handle RDF directly:
@@ -249,12 +269,31 @@ the form never handle RDF directly:
 ```
 requirement: {id, label, comment}
 kpi:         {id, label, formula, owner, target, comment}
+stage:       {id, label, component_uri, filter_value, entry_criteria}
 ```
 
-An entry's ID is the local name of its URI (`req_<slug>` / `kpi_<slug>`) and never changes, so renaming an
-entry doesn't break the journeys pointing at it. `GET /api/library` adds a usage count per entry. Deleting
-a journey never deletes library entries. Journeys saved before the library existed keep their own
-requirement and KPI until a library entry is picked for them.
+An entry's ID is the local name of its URI (`req_<slug>` / `kpi_<slug>` / `stage_<slug>`) and never changes,
+so renaming an entry doesn't break the journeys pointing at it. `GET /api/library` adds a usage count per
+entry (and, for stages, the component's key, label and data views). Deleting a journey never deletes
+library entries. Journeys saved before the library existed keep their own requirement and KPI until a
+library entry is picked for them.
+
+**Shared stages** can't simply be referenced like requirements and KPIs, because a stage's `order` and
+`rolls_up_to` belong to each journey, and every query walks `Journey → has_stage → Stage ← Measurement`.
+So:
+
+- The library holds a `martech:SharedStage` (label, `entry_criteria`) with its own `Measurement`
+  (`lib:measurement_<id>`: component and optional `filter_value`).
+- Each journey keeps its own `Stage` and `Measurement`, with the same values, plus
+  `martech:based_on <lib:stage_…>`. Queries, the graph and plugin builds read the journey's stages as before.
+- `propagate_shared_stages()` in `server.py` rewrites every journey file whose stages are `based_on` a
+  changed entry, through the round trip (`journey_from_graph()` → `build_journey_turtle()`). All new files
+  are built first; nothing is written if one journey can't be round-tripped or its `data_view` doesn't have
+  the new component. It runs on `POST /api/library/stage/<id>` and on a journey save that edits a shared
+  stage.
+- Journey save rows carry `shared_source` (`""`, `"library"`, `"new"`), `shared_id` and `update_shared`. A
+  `library` row takes its values from the entry, unless `update_shared` writes the row into the entry first.
+  A shared stage's component must be defined outside the journey file, so other journeys can point at it.
 
 ## Graph and Query pages
 

@@ -186,10 +186,18 @@ def build_plugin(data_dir, out_dir, name, description, skill_description=None, v
         shutil.rmtree(references_dir)
     references_dir.mkdir(parents=True)
     shutil.copy2(ge.ONTOLOGY_FILE, references_dir / ge.ONTOLOGY_FILE.name)
+    # The plugin is for agents, so inactive components are left out of both the reference files and the
+    # snapshot; files without any are copied as they are.
+    full = ge.load_graph(ontology_path=ge.ONTOLOGY_FILE, script_dir=data_dir)
+    inactive = ge.inactive_components(full)
     for f in instance_files:
-        shutil.copy2(f, references_dir / f.name)
+        filtered = ge.filtered_instance_text(f, inactive)
+        if filtered is None:
+            shutil.copy2(f, references_dir / f.name)
+        else:
+            (references_dir / f.name).write_text(filtered, encoding="utf-8", newline="\n")
 
-    g = ge.load_graph(ontology_path=ge.ONTOLOGY_FILE, script_dir=data_dir)
+    g = ge.without_inactive_components(full, inactive)
     sources = [ge.ONTOLOGY_FILE.name] + [f.name for f in instance_files]
     (references_dir / "context-snapshot.md").write_text(build_snapshot(g, sources), encoding="utf-8", newline="\n")
 

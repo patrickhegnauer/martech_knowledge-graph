@@ -68,7 +68,8 @@ def create_mcp(data_dir: Path) -> FastMCP:
 
     def load_active_graph():
         active_dir = resolve_active_dir(data_dir, ge.EXAMPLES_DIR)
-        return ge.load_graph(ontology_path=ge.ONTOLOGY_FILE, script_dir=active_dir)
+        # Agents only see active components (see graph_explorer.inactive_components()).
+        return ge.without_inactive_components(ge.load_graph(ontology_path=ge.ONTOLOGY_FILE, script_dir=active_dir))
 
     @mcp.tool
     def run_sparql(query: str) -> dict:

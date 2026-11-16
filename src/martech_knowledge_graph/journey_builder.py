@@ -45,6 +45,7 @@ class StageSpec:
     filter_value: str = None # only needed when multiple stages share one component
     rolls_up_to_kpi: bool = False
     entry_criteria: str = None  # optional: what defines that a user has entered this stage
+    shared_uri: str = None   # set when the stage is kept in sync with a shared library stage
 
 
 @dataclass
@@ -128,12 +129,10 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
     if spec.kpi_uri:
         lines += ["# Shared: defined in library-instances.ttl.", ""]
     else:
-        kpi_lines = [
-            "data:kpi a martech:KPI ;",
-            f'    rdfs:label "{_esc(spec.kpi_label)}" ;',
-            f'    martech:formula "{_esc(spec.kpi_formula)}" ;',
-            f'    martech:owner "{_esc(spec.kpi_owner)}" ;',
-        ]
+        kpi_lines = ["data:kpi a martech:KPI ;", f'    rdfs:label "{_esc(spec.kpi_label)}" ;']
+        if spec.kpi_formula:
+            kpi_lines.append(f'    martech:formula "{_esc(spec.kpi_formula)}" ;')
+        kpi_lines.append(f'    martech:owner "{_esc(spec.kpi_owner)}" ;')
         if spec.kpi_target is not None:
             kpi_lines.append(f"    martech:target {spec.kpi_target} ;")
         if spec.kpi_comment:
@@ -172,6 +171,8 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
         block = [f"data:stage_{s.key} a martech:Stage ;", f'    rdfs:label "{_esc(s.label)}" ;', f"    martech:order {s.order} ;"]
         if s.entry_criteria:
             block.append(f'    martech:entry_criteria "{_esc(s.entry_criteria)}" ;')
+        if s.shared_uri:
+            block.append(f"    martech:based_on <{s.shared_uri}> ;")
         if s.rolls_up_to_kpi:
             block.append(f"    martech:rolls_up_to {kpi_ref} ;")
         block[-1] = block[-1].rstrip(" ;") + " ."
@@ -241,7 +242,7 @@ def build_journey_turtle(spec: JourneySpec, xdm_base_url: str = DEFAULT_XDM_BASE
 _ROUND_TRIP_PREDICATES = {
     "type", "label", "comment", "status", "addressed_by", "formula", "owner", "target", "has_stage", "order",
     "rolls_up_to", "component_type", "definition", "caveats", "context", "refs", "maps_to", "source_system",
-    "measured_entity", "measured_component", "filter_value", "entry_criteria", "data_view",
+    "measured_entity", "measured_component", "filter_value", "entry_criteria", "data_view", "based_on",
 }
 _ROUND_TRIP_TYPES = {"Requirement", "KPI", "Journey", "Stage", "Component", "DataLayerVariable", "Measurement"}
 
@@ -252,10 +253,15 @@ def _local(uri):
 
 def journey_core(g, journey):
     """(kpi, requirement) for the journey in g: the KPI its stages roll up to, and the requirement that KPI
-    is addressed by. Either is None when the file does not have exactly one of it."""
+    is addressed by. Either is None when the file does not have exactly one of it.
+
+    A journey saved while no stage rolled up to the KPI has no stage link to it; the file still holds the
+    requirement's addressed_by link, so that KPI is used instead when it is the only one."""
     from rdflib import Namespace
     M = Namespace(ONTOLOGY_NS)
     kpis = {k for st in g.objects(journey, M.has_stage) for k in g.objects(st, M.rolls_up_to)}
+    if not kpis:
+        kpis = set(g.objects(None, M.addressed_by))
     if len(kpis) != 1:
         return None, None
     kpi = next(iter(kpis))
@@ -288,7 +294,7 @@ def journey_from_graph(g, slug, library=None):
     journey = journeys[0]
     kpi, req = journey_core(g, journey)
     if kpi is None:
-        return None, "must have stages that all roll up to exactly one KPI"
+        return None, "must be linked to exactly one KPI (through the stages that roll up to it)"
     if req is None:
         return None, "must have exactly one requirement addressed by that KPI"
 
@@ -331,6 +337,7 @@ def journey_from_graph(g, slug, library=None):
             label=text(st, RDFS.label), order=int(one(st, M.order) or 0), component_key=comp_key,
             filter_value=text(m, M.filter_value) or None, rolls_up_to_kpi=one(st, M.rolls_up_to) is not None,
             entry_criteria=text(st, M.entry_criteria) or None,
+            shared_uri=str(g.value(st, M.based_on)) if g.value(st, M.based_on) is not None else None,
         ))
     stages.sort(key=lambda s: s.order)
 

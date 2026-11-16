@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 
 from . import __version__
+from . import graph_explorer as ge
 from .workspace import MODE_MARKER_NAME
 
 REPO_URL = "https://github.com/patrickhegnauer/martech_knowledge-graph.git"
@@ -50,8 +51,14 @@ def export_mcp_project(out_dir: Path, source_dir: Path, name: str) -> int:
         shutil.rmtree(data_dir)
     data_dir.mkdir(parents=True)
 
+    # The MCP server only shows active components, so inactive ones are left out of the snapshot.
+    inactive = ge.inactive_components(ge.load_graph(ontology_path=ge.ONTOLOGY_FILE, script_dir=source_dir))
     for f in ttl_files:
-        shutil.copy2(f, data_dir / f.name)
+        filtered = ge.filtered_instance_text(f, inactive)
+        if filtered is None:
+            shutil.copy2(f, data_dir / f.name)
+        else:
+            (data_dir / f.name).write_text(filtered, encoding="utf-8")
     (data_dir / MODE_MARKER_NAME).write_text("org", encoding="utf-8")
 
     pin = f"@v{__version__}"

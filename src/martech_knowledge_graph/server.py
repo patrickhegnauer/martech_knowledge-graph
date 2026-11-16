@@ -89,7 +89,11 @@ DLV_FILE_NAME = "datalayer-instances.ttl"
 DLV_NS = Namespace("https://example.org/martech/data/datalayer/")
 RESERVED_JOURNEY_SLUGS = {"components", "datalayer", "library"}
 # Form kind -> key in library.read_entries()
-LIBRARY_KINDS = {"requirement": "requirements", "kpi": "kpis"}
+LIBRARY_KINDS = {"requirement": "requirements", "kpi": "kpis", "stage": "stages"}
+ROLL_UP_REQUIRED = ("Mark at least one stage as 'Rolls up to KPI' (usually the last one): that is what links "
+                    "the journey to its KPI")
+# Form kind -> id prefix of new library entries
+LIBRARY_ID_PREFIXES = {"requirement": "req", "kpi": "kpi", "stage": "stage"}
 
 
 def create_app(data_dir: Path) -> Flask:
@@ -260,7 +264,25 @@ def create_app(data_dir: Path) -> Flask:
                     return path, g, s
         return None, None, None
 
-    def component_summary(merged_graph, subject):
+    def journeys_by_component(file_graphs):
+        """{component URI: [{slug, label}]} of the journeys with a stage measured by that component. Walks
+        each journey file on its own, so a shared stage in the library doesn't count as a use."""
+        uses = {}
+        for path, g in file_graphs.items():
+            for j in g.subjects(RDF.type, MARTECH.Journey):
+                entry = {"slug": path.name.replace("-instances.ttl", ""),
+                         "label": str(g.value(j, RDFS.label) or ge._local_name(j))}
+                stages = set(g.objects(j, MARTECH.has_stage))
+                comps = {c for m in g.subjects(RDF.type, MARTECH.Measurement)
+                         if g.value(m, MARTECH.measured_entity) in stages
+                         for c in g.objects(m, MARTECH.measured_component)}
+                for c in comps:
+                    uses.setdefault(c, []).append(entry)
+        for entries in uses.values():
+            entries.sort(key=lambda e: e["label"].lower())
+        return uses
+
+    def component_summary(merged_graph, subject, journey_uses=None, inactive=frozenset(), used=frozenset()):
         key = component_key_from_subject(subject)
         label = str(merged_graph.value(subject, RDFS.label) or key)
         ctype = str(merged_graph.value(subject, MARTECH.component_type) or "")
@@ -288,6 +310,9 @@ def create_app(data_dir: Path) -> Flask:
             "owner": str(owner) if owner else "",
             "has_context": has_context,
             "data_views": data_view_ids_of(refs),
+            "journeys": (journey_uses or {}).get(subject, []),
+            "active": subject not in inactive,
+            "used": subject in used,
         }
 
     def collect_state():
@@ -297,17 +322,22 @@ def create_app(data_dir: Path) -> Flask:
         for g in file_graphs.values():
             merged += g
 
-        components = [component_summary(merged, s) for s in merged.subjects(RDF.type, MARTECH.Component)]
+        journey_uses = journeys_by_component(file_graphs)
+        inactive, used = ge.inactive_components(merged), ge.used_components(merged)
+        components = [component_summary(merged, s, journey_uses, inactive, used)
+                      for s in merged.subjects(RDF.type, MARTECH.Component)]
         components.sort(key=lambda c: c["name"])
 
         # For the data view filter on the Components page. Names come from the local cache only;
         # /api/sources is what backfills them from CJA.
-        dv_counts = {}
+        dv_counts, dv_active = {}, {}
         for c in components:
             for dv_id in c["data_views"]:
                 dv_counts[dv_id] = dv_counts.get(dv_id, 0) + 1
+                dv_active[dv_id] = dv_active.get(dv_id, 0) + (1 if c["active"] else 0)
         dv_names = load_data_view_names()
-        data_views = [{"id": dv_id, "name": dv_names.get(dv_id, ""), "component_count": count}
+        data_views = [{"id": dv_id, "name": dv_names.get(dv_id, ""), "component_count": count,
+                       "active_count": dv_active.get(dv_id, 0)}
                       for dv_id, count in dv_counts.items()]
         data_views.sort(key=lambda d: (d["name"] or d["id"]).lower())
 
@@ -443,6 +473,8 @@ def create_app(data_dir: Path) -> Flask:
         g.add((s, MARTECH.owner, rdflib.Literal(body.get("owner", ""))))
         g.add((s, MARTECH.governance_notes, rdflib.Literal(body.get("governance_notes", ""))))
         g.add((s, MARTECH.is_pii, rdflib.Literal(bool(body.get("is_pii")))))
+        # Curating a component activates it.
+        g.set((s, MARTECH.active, rdflib.Literal(True)))
         for ref in body.get("refs", []):
             url = (ref or {}).get("url", "").strip()
             if url:
@@ -464,6 +496,44 @@ def create_app(data_dir: Path) -> Flask:
         turtle_snippet = preview.serialize(format="turtle")
 
         return jsonify({"ok": True, "turtle": turtle_snippet})
+
+    @app.route("/api/components/activation", methods=["POST"])
+    def api_set_component_activation():
+        """Activate or deactivate many components at once. Each file is written once, however many of its
+        components change. A used component stays active: deactivating it is skipped and reported."""
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+        body = request.get_json(force=True) or {}
+        keys = body.get("keys")
+        if not isinstance(keys, list) or not keys:
+            return jsonify({"error": "keys must be a non-empty list"}), 400
+        active = bool(body.get("active"))
+
+        graphs = load_instance_file_graphs()
+        index = {}
+        for path, fg in graphs.items():
+            for s in fg.subjects(RDF.type, MARTECH.Component):
+                index.setdefault(component_key_from_subject(s), (path, s))
+        used = set()
+        for fg in graphs.values():
+            used |= ge.used_components(fg)
+
+        changed_paths, changed, skipped_used, unknown = set(), [], [], []
+        for key in dict.fromkeys(str(k) for k in keys):
+            if key not in index:
+                unknown.append(key)
+                continue
+            path, s = index[key]
+            if not active and s in used:
+                skipped_used.append(key)
+                continue
+            graphs[path].set((s, MARTECH.active, rdflib.Literal(active)))
+            changed_paths.add(path)
+            changed.append(key)
+        for path in changed_paths:
+            path.write_text(graphs[path].serialize(format="turtle"), encoding="utf-8")
+        return jsonify({"ok": True, "changed": changed, "skipped_used": skipped_used, "unknown": unknown})
 
     cja_config_path = data_dir / CJA_CONFIG_NAME
     cja_clients = {}
@@ -697,6 +767,8 @@ def create_app(data_dir: Path) -> Flask:
             g.add((subject, RDF.type, MARTECH.Component))
             g.add((subject, RDFS.label, rdflib.Literal(comp["name"])))
             g.add((subject, MARTECH.component_type, rdflib.Literal(comp["type"])))
+            # New components start inactive: they're activated on the Components page once needed.
+            g.add((subject, MARTECH.active, rdflib.Literal(False)))
             g.add((subject, MARTECH.refs, rdflib.URIRef(ref)))
             if xdm_ref is not None:
                 g.add((subject, MARTECH.refs, xdm_ref))
@@ -737,6 +809,9 @@ def create_app(data_dir: Path) -> Flask:
             slug = rows[0]["journey_slug"].strip()
             if not slug:
                 raise ValueError("journey_slug is required in the first row")
+
+            if not any(str(r.get("rolls_up_to_kpi") or "").strip().lower() in ("yes", "true", "1") for r in rows):
+                raise ValueError(ROLL_UP_REQUIRED + " (set rolls_up_to_kpi to yes on that row)")
 
             used = {r["component_key"].strip() for r in rows}
             dv_map = component_data_view_map()
@@ -783,7 +858,7 @@ def create_app(data_dir: Path) -> Flask:
             "stages": [
                 {"key": st.key, "label": st.label, "component_key": st.component_key,
                  "filter_value": st.filter_value or "", "rolls_up_to_kpi": st.rolls_up_to_kpi,
-                 "entry_criteria": st.entry_criteria or ""}
+                 "entry_criteria": st.entry_criteria or "", "shared_id": lib.id_from_uri(st.shared_uri or "")}
                 for st in spec.stages
             ],
             "own_components": [c.key for c in spec.components],
@@ -814,6 +889,44 @@ def create_app(data_dir: Path) -> Flask:
                     counts[uri] = counts.get(uri, 0) + 1
         return counts
 
+    # Shared stages: each journey keeps its own Stage (order, KPI roll-up) based_on the library entry and
+    # carrying its name, component, filter value and entry criteria. Changing the entry rewrites every
+    # journey file that uses it, all or nothing.
+
+    def propagate_shared_stages(stage_entries, skip_path=None):
+        """([(path, turtle, journey label)], problems) for every journey file except skip_path with a stage
+        based_on one of stage_entries ({uri: entry}). Nothing is written here."""
+        writes, problems = [], []
+        dv_map = component_data_view_map()
+        library_graph = load_library_graph()
+        for path, fg in load_instance_file_graphs().items():
+            if path.name == lib.LIBRARY_FILE_NAME or path == skip_path:
+                continue
+            journey = next(fg.subjects(RDF.type, MARTECH.Journey), None)
+            if journey is None or not any(str(o) in stage_entries for o in fg.objects(None, MARTECH.based_on)):
+                continue
+            slug = path.name[:-len("-instances.ttl")]
+            label = str(fg.value(journey, RDFS.label) or slug)
+            spec, reason = jb.journey_from_graph(fg, slug, library=library_graph)
+            if spec is None:
+                problems.append(f"journey '{label}' can't be rewritten: it {reason}")
+                continue
+            for st in spec.stages:
+                entry = stage_entries.get(st.shared_uri)
+                if entry is None:
+                    continue
+                st.label = entry["label"]
+                st.component_key = component_key_from_subject(rdflib.URIRef(entry["component_uri"]))
+                st.filter_value = entry.get("filter_value") or None
+                st.entry_criteria = entry.get("entry_criteria") or None
+                if spec.data_view and dv_map.get(st.component_key) and spec.data_view not in dv_map[st.component_key]:
+                    problems.append(f"journey '{label}' is measured in data view "
+                                    f"{data_view_display(spec.data_view)}, which doesn't have that component")
+            writes.append((path, jb.build_journey_turtle(
+                spec, xdm_base_url=load_settings()["xdm_base_url"], existing_components=existing_component_map(path),
+            ), label))
+        return writes, problems
+
     @app.route("/api/library", methods=["GET"])
     def api_get_library():
         entries = lib.read_entries(library_file())
@@ -821,19 +934,31 @@ def create_app(data_dir: Path) -> Flask:
         for kind in LIBRARY_KINDS.values():
             for entry in entries[kind]:
                 entry["usage"] = usage.get(lib.uri_for(entry["id"]), 0)
+        merged, dv_map = merged_instances(), component_data_view_map()
+        for entry in entries["stages"]:
+            comp = rdflib.URIRef(entry["component_uri"])
+            entry["component_key"] = component_key_from_subject(comp)
+            entry["component_label"] = str(merged.value(comp, RDFS.label) or entry["component_key"])
+            entry["data_views"] = dv_map.get(entry["component_key"], [])
         return jsonify(entries)
 
     def library_fields(kind, body):
-        """(fields, problems) for a requirement or KPI library entry, from the form body."""
+        """(fields, problems) for a requirement, KPI or stage library entry, from the form body."""
         problems = []
         label = (body.get("label") or "").strip()
         if not label:
             problems.append("Name is required")
         if kind == "requirement":
             return {"label": label, "comment": (body.get("comment") or "").strip()}, problems
+        if kind == "stage":
+            components = existing_component_map()
+            comp_key = (body.get("component_key") or "").strip()
+            if comp_key not in components:
+                problems.append("Pick a component from the list")
+            return {"label": label, "component_uri": components.get(comp_key, ""),
+                    "filter_value": (body.get("filter_value") or "").strip(),
+                    "entry_criteria": (body.get("entry_criteria") or "").strip()}, problems
         formula, owner = (body.get("formula") or "").strip(), (body.get("owner") or "").strip()
-        if not formula:
-            problems.append("KPI formula is required")
         if not owner:
             problems.append("KPI owner is required")
         target = body.get("target")
@@ -857,7 +982,7 @@ def create_app(data_dir: Path) -> Flask:
             return jsonify({"error": "; ".join(problems)}), 400
         entries = lib.read_entries(library_file())
         pool = entries[LIBRARY_KINDS[kind]]
-        entry_id = lib.new_id("req" if kind == "requirement" else "kpi", fields["label"], {e["id"] for e in pool})
+        entry_id = lib.new_id(LIBRARY_ID_PREFIXES[kind], fields["label"], {e["id"] for e in pool})
         pool.append({"id": entry_id, **fields})
         lib.write_entries(library_file(), entries)
         return jsonify({"ok": True, "id": entry_id})
@@ -877,8 +1002,16 @@ def create_app(data_dir: Path) -> Flask:
         if entry is None:
             return jsonify({"error": f"no {kind} '{entry_id}' in the library"}), 404
         entry.update(fields)
+        writes = []
+        if kind == "stage":
+            writes, problems = propagate_shared_stages({lib.uri_for(entry_id): entry})
+            if problems:
+                return jsonify({"error": "Not saved, because the change can't be applied to every journey "
+                                         "using this stage: " + "; ".join(problems)}), 400
         lib.write_entries(library_file(), entries)
-        return jsonify({"ok": True, "id": entry_id})
+        for path, turtle, _ in writes:
+            path.write_text(turtle, encoding="utf-8")
+        return jsonify({"ok": True, "id": entry_id, "updated_journeys": [label for _, _, label in writes]})
 
     @app.route("/api/journeys/<slug>", methods=["GET"])
     def api_get_journey(slug):
@@ -931,7 +1064,7 @@ def create_app(data_dir: Path) -> Flask:
         journey_label = need("journey_label", "Journey name")
         requirement_label = need("requirement_label", "Requirement")
         kpi_label = need("kpi_label", "KPI name")
-        kpi_formula = need("kpi_formula", "KPI formula")
+        kpi_formula = (body.get("kpi_formula") or "").strip()
         kpi_owner = need("kpi_owner", "KPI owner")
 
         target = body.get("kpi_target")
@@ -965,39 +1098,90 @@ def create_app(data_dir: Path) -> Flask:
         dv_problems = data_view_problems(data_view, [], dv_map, "this journey")
         problems += dv_problems
 
+        # The library is only written after every check has passed.
+        library = lib.read_entries(library_file())
+        library_changed = False
+
+        # Stages: each is this journey's own (shared_source ""), kept in sync with a shared library stage
+        # ("library"), or saved to the library as a new shared stage ("new"). A shared stage's component must
+        # live outside this journey file, so other journeys can point at it too.
+        rows = body.get("stages") or []
+        stage_pool = library["stages"]
+        changed_stage_ids = set()
+
+        def row_text(row, field):
+            return (row.get(field) or "").strip()
+
+        # Edits to shared stages first, so every row using one of them sees the new values.
+        for i, row in enumerate(rows, start=1):
+            if row_text(row, "shared_source") != "library" or not row.get("update_shared"):
+                continue
+            entry = next((e for e in stage_pool if e["id"] == row_text(row, "shared_id")), None)
+            comp_key = row_text(row, "component_key")
+            if entry is None:
+                continue   # reported by the loop below
+            if not row_text(row, "label") or comp_key not in available:
+                problems.append(f"Stage {i}: a shared stage needs a name and a synced or curated component")
+                continue
+            entry.update(label=row_text(row, "label"), component_uri=available[comp_key],
+                         filter_value=row_text(row, "filter_value"), entry_criteria=row_text(row, "entry_criteria"))
+            changed_stage_ids.add(entry["id"])
+            library_changed = True
+
         stages, used_keys = [], set()
-        for i, row in enumerate(body.get("stages") or [], start=1):
-            label = (row.get("label") or "").strip()
-            comp_key = (row.get("component_key") or "").strip()
+        for i, row in enumerate(rows, start=1):
+            source = row_text(row, "shared_source")
+            shared_uri = None
+            if source == "library":
+                entry = next((e for e in stage_pool if e["id"] == row_text(row, "shared_id")), None)
+                if entry is None:
+                    problems.append(f"Stage {i}: its shared stage is no longer in the library")
+                    continue
+                label, filter_value, entry_criteria = entry["label"], entry["filter_value"], entry["entry_criteria"]
+                comp_key = component_key_from_subject(rdflib.URIRef(entry["component_uri"]))
+                shared_uri = lib.uri_for(entry["id"])
+            else:
+                label, comp_key = row_text(row, "label"), row_text(row, "component_key")
+                filter_value, entry_criteria = row_text(row, "filter_value"), row_text(row, "entry_criteria")
             if not label:
                 problems.append(f"Stage {i}: name is required")
                 continue
             if comp_key not in available_keys:
                 problems.append(f"Stage {i} ('{label}'): pick a component from the list")
                 continue
+            if source in ("library", "new") and comp_key not in available:
+                problems.append(f"Stage {i} ('{label}'): a shared stage can't use a component defined only "
+                                "inside this journey; pick a synced or curated component")
+                continue
             if data_view and not dv_problems and dv_map.get(comp_key) and data_view not in dv_map[comp_key]:
                 problems.append(f"Stage {i} ('{label}'): its component is not in data view "
                                 f"{data_view_display(data_view)}; pick one from that data view")
                 continue
-            key =(row.get("key") or "").strip() or jb.slugify(label, "stage")
+            if source == "new":
+                new_entry = {"id": lib.new_id("stage", label, {e["id"] for e in stage_pool}), "label": label,
+                             "component_uri": available[comp_key], "filter_value": filter_value,
+                             "entry_criteria": entry_criteria}
+                stage_pool.append(new_entry)
+                library_changed = True
+                shared_uri = lib.uri_for(new_entry["id"])
+            key = row_text(row, "key") or jb.slugify(label, "stage")
             base, n = key, 2
             while key in used_keys:
                 key, n = f"{base}_{n}", n + 1
             used_keys.add(key)
             stages.append(jb.StageSpec(
-                key=key, label=label, order=i, component_key=comp_key,
-                filter_value=(row.get("filter_value") or "").strip() or None,
-                rolls_up_to_kpi=bool(row.get("rolls_up_to_kpi")),
-                entry_criteria=(row.get("entry_criteria") or "").strip() or None,
+                key=key, label=label, order=i, component_key=comp_key, filter_value=filter_value or None,
+                rolls_up_to_kpi=bool(row.get("rolls_up_to_kpi")), entry_criteria=entry_criteria or None,
+                shared_uri=shared_uri,
             ))
         if not stages and not any("Stage" in p for p in problems):
             problems.append("Add at least one stage")
+        elif stages and not any(st.rolls_up_to_kpi for st in stages):
+            # The roll-up is what links the journey to its KPI; without it the journey can't be reopened.
+            problems.append(ROLL_UP_REQUIRED)
 
         # Requirement and KPI: each comes from the shared library (source "library"), is created there
         # (source "new"), or stays inside this journey file (source "local", legacy journeys being edited).
-        # The library is only written after every check has passed.
-        library = lib.read_entries(library_file())
-        library_changed = False
         shared_fields = {
             "requirement": {"label": requirement_label, "comment": (body.get("requirement_comment") or "").strip()},
             "kpi": {"label": kpi_label, "formula": kpi_formula, "owner": kpi_owner, "target": kpi_target,
@@ -1048,14 +1232,26 @@ def create_app(data_dir: Path) -> Flask:
         turtle_text = jb.build_journey_turtle(
             spec, xdm_base_url=load_settings()["xdm_base_url"], existing_components=available,
         )
+        # Shared stages edited here change every other journey that uses them, or nothing is saved.
+        writes = []
+        if changed_stage_ids:
+            writes, sync_problems = propagate_shared_stages(
+                {lib.uri_for(e["id"]): e for e in stage_pool if e["id"] in changed_stage_ids}, skip_path=out_path)
+            if sync_problems:
+                return jsonify({"error": "Not saved, because the shared stage change can't be applied to every "
+                                         "journey using it: " + "; ".join(sync_problems)}), 400
         if library_changed:
             lib.write_entries(library_file(), library)
         out_path.write_text(turtle_text, encoding="utf-8")
+        for path, other_turtle, _ in writes:
+            path.write_text(other_turtle, encoding="utf-8")
         reused = sorted({st.component_key for st in stages} & set(available))
         return jsonify({"ok": True, "slug": slug, "file": out_path.name, "turtle": turtle_text,
                         "reused_components": reused, "library_changed": library_changed,
                         "requirement_id": lib.id_from_uri(shared_uris["requirement"] or ""),
-                        "kpi_id": lib.id_from_uri(shared_uris["kpi"] or "")})
+                        "kpi_id": lib.id_from_uri(shared_uris["kpi"] or ""),
+                        "stages": spec_to_json(spec)["stages"],
+                        "updated_journeys": [label for _, _, label in writes]})
 
     def skills_dir():
         return current_dir() / "skills"
@@ -1106,7 +1302,8 @@ def create_app(data_dir: Path) -> Flask:
                 "slug": slug,
             }), 409
 
-        g = ge.load_graph(ontology_path=ONTOLOGY_FILE, script_dir=current_dir())
+        # Skills are for agents, which only see active components.
+        g = ge.without_inactive_components(ge.load_graph(ontology_path=ONTOLOGY_FILE, script_dir=current_dir()))
         markdown = sb.build_skill_draft(g, name)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(markdown, encoding="utf-8")
@@ -1181,15 +1378,20 @@ def create_app(data_dir: Path) -> Flask:
         data = ge.extract_full_graph(g)
         # For the data view filter: each component's data views (from its urn:cja: refs; a node's
         # properties keep only one ref), and the data views with their names.
-        counts = {}
+        # Also whether each component is active (inactive ones are hidden unless asked for).
+        inactive = {str(c) for c in ge.inactive_components(g)}
+        counts, active_counts = {}, {}
         for node in data["nodes"]:
             if node["group"] == "Component":
                 node["data_views"] = data_view_ids_of(str(r) for r in g.objects(rdflib.URIRef(node["id"]), MARTECH.refs))
+                node["active"] = node["id"] not in inactive
                 for dv_id in node["data_views"]:
                     counts[dv_id] = counts.get(dv_id, 0) + 1
+                    active_counts[dv_id] = active_counts.get(dv_id, 0) + (1 if node["active"] else 0)
         names = load_data_view_names()
         data["data_views"] = sorted(
-            ({"id": dv_id, "name": names.get(dv_id, ""), "component_count": n} for dv_id, n in counts.items()),
+            ({"id": dv_id, "name": names.get(dv_id, ""), "component_count": n,
+              "active_count": active_counts.get(dv_id, 0)} for dv_id, n in counts.items()),
             key=lambda d: (d["name"] or d["id"]).lower())
         return jsonify(data)
 

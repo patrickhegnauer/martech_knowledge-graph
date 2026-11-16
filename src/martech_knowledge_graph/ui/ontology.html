@@ -60,6 +60,7 @@
           <tr><td><code>KPI</code></td><td>A measurable objective that addresses a requirement.</td></tr>
           <tr><td><code>Journey</code></td><td>A named, end-to-end customer path.</td></tr>
           <tr><td><code>Stage</code></td><td>An ordered step within a journey.</td></tr>
+          <tr><td><code>SharedStage</code></td><td>A stage defined once in the shared library (name, entry criteria, measuring component) and reused by several journeys. Each journey keeps its own Stage, with its own order and KPI roll-up, based_on this one and kept in sync with it.</td></tr>
           <tr><td><code>Component</code></td><td>A metric or dimension from the semantic layer (CJA Semantic Layer MCP). Identity is authoritative in AEP; business meaning (definition, caveats, context) is curated here.</td></tr>
           <tr><td><code>DataLayerVariable</code></td><td>The raw implementation artifact (e.g. a data layer field) that populates a component.</td></tr>
           <tr><td><code>Measurement</code></td><td>A "measured_by" relationship between a Stage and a Component, optionally qualified by a filter value (e.g. a specific page-name value that identifies the stage).</td></tr>
@@ -79,6 +80,7 @@
           <tr><td><code>addressed_by</code></td><td>Requirement</td><td>KPI</td><td>Links a requirement to the KPI that measures it.</td></tr>
           <tr><td><code>has_stage</code></td><td>Journey</td><td>Stage</td><td>Links a journey to one of its ordered stages.</td></tr>
           <tr><td><code>rolls_up_to</code></td><td>Stage</td><td>KPI</td><td>Links a stage's outcome to the KPI it contributes to.</td></tr>
+          <tr><td><code>based_on</code></td><td>Stage</td><td>SharedStage</td><td>The shared library stage this journey stage is kept in sync with. Only its order and KPI roll-up are its own.</td></tr>
           <tr><td><code>maps_to</code></td><td>DataLayerVariable</td><td>Component</td><td>Links a raw implementation variable to the semantic component it populates.</td></tr>
           <tr><td><code>refs</code></td><td>Component</td><td>rdfs:Resource</td><td>Points to the authoritative entity in AEP's own native knowledge graph (e.g. an XDM path URI). Reference only, never duplicated locally.</td></tr>
         </tbody>
@@ -111,7 +113,7 @@
         <thead><tr><th>Property</th><th>Domain</th><th>Range</th><th>Comment</th></tr></thead>
         <tbody>
           <tr><td><code>status</code></td><td>Requirement</td><td>xsd:string</td><td>Lifecycle status of a requirement, e.g. active, answered, retired.</td></tr>
-          <tr><td><code>formula</code></td><td>KPI</td><td>xsd:string</td><td>The formula or definition of a KPI.</td></tr>
+          <tr><td><code>formula</code></td><td>KPI</td><td>xsd:string</td><td>Optional. The formula or definition of a KPI.</td></tr>
           <tr><td><code>target</code></td><td>KPI</td><td>xsd:decimal</td><td>The target or benchmark value for a KPI.</td></tr>
           <tr><td><code>order</code></td><td>Stage</td><td>xsd:integer</td><td>Position of the stage within its journey.</td></tr>
           <tr><td><code>entry_criteria</code></td><td>Stage</td><td>xsd:string</td><td>What defines that a user has entered this stage.</td></tr>
@@ -120,6 +122,7 @@
           <tr><td><code>caveats</code></td><td>Component</td><td>xsd:string</td><td>Known data-quality issues, gaps, or limitations of the component.</td></tr>
           <tr><td><code>context</code></td><td>Component</td><td>xsd:string</td><td>Business or industry context explaining why the component matters.</td></tr>
           <tr><td><code>component_type</code></td><td>Component</td><td>xsd:string</td><td>Whether the component is a metric or a dimension.</td></tr>
+          <tr><td><code>active</code></td><td>Component</td><td>xsd:boolean</td><td>Whether the component is in use for curation, journeys and agents. A component measured by a stage is always active; otherwise this flag decides, and without it a component counts as active once it has curated context. CJA sync adds new components as inactive.</td></tr>
           <tr><td><code>is_pii</code></td><td>Component</td><td>xsd:boolean</td><td>Whether the component carries or is derived from personally identifiable information.</td></tr>
           <tr><td><code>governance_notes</code></td><td>Component</td><td>xsd:string</td><td>Data governance notes: consent requirements, data quality/retention concerns, or other compliance-relevant context.</td></tr>
           <tr><td><code>source_system</code></td><td>DataLayerVariable</td><td>xsd:string</td><td>Where the raw variable is implemented, e.g. the tagging/data layer system.</td></tr>
