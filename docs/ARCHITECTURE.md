@@ -407,6 +407,9 @@ doesn't pay for FastMCP's imports.
 - `__version__` in `__init__.py` is the single source of truth: `pyproject.toml` reads it dynamically,
   `export-mcp` pins to it, and the UI shows the version of the running process (so a stale `serve`
   process shows the old number after an update).
+- **Releasing:** every commit that bumps `__version__` gets a matching `v<version>` tag, pushed together
+  with it (`git tag v0.1.19 && git push origin main v0.1.19`). Installations outside this repo pin to
+  these tags (`pip install "git+…@v0.1.19"`), so an untagged version can't be installed by number.
 
 ## Known gaps
 
