@@ -91,8 +91,9 @@
 
   <section>
     <h2>Shared library</h2>
-    <p>Requirements, KPIs and stages that several journeys use. Each is stored once, so changing it here changes every journey that uses it. A shared stage keeps its position and its KPI roll-up per journey; only its name, component, filter value and entry criteria are shared. Deleting a journey never deletes its library entries; an entry no journey uses stays here with a count of 0. The library belongs to your own data; the demo data is read-only and has none.</p>
+    <p>Requirements, KPIs and stages that several journeys use. Each is stored once, so changing it here changes every journey that uses it. A shared stage keeps its position and its KPI roll-up per journey; only its name, component, filter value and entry criteria are shared. Deleting a journey never deletes its library entries; an entry no journey uses stays here with a count of 0 until you delete it. An entry that journeys still use can't be deleted. The library belongs to your own data; the demo data is read-only and has none.</p>
     <p class="note" id="library-note">Loading the library…</p>
+    <p class="note" id="library-delete-status" hidden></p>
 
     <h3>Requirements</h3>
     <div class="table-scroll">
@@ -375,6 +376,7 @@ function dataViewText(ids) {
 
 function libraryCell(text) {
   const td = document.createElement("td");
+  td.className = "cell-wrap";   // long text (descriptions, data views) wraps, so the row's buttons stay visible
   td.textContent = text;
   return td;
 }
@@ -389,19 +391,58 @@ function libraryNameCell(text, pillType) {
   return td;
 }
 
-function libraryRow(tbody, pillType, cells, onEdit) {
+function libraryRow(tbody, kind, entry, cells, onEdit) {
   const tr = document.createElement("tr");
-  tr.appendChild(libraryNameCell(cells[0], pillType));
+  tr.dataset.libraryId = entry.id;
+  tr.appendChild(libraryNameCell(cells[0], kind));
   cells.slice(1).forEach(text => tr.appendChild(libraryCell(text)));
   const actionTd = document.createElement("td");
+  const actions = document.createElement("div");
+  actions.className = "row-actions";
+  actionTd.appendChild(actions);
   const edit = document.createElement("button");
   edit.type = "button";
   edit.className = "secondary btn-sm";
   edit.textContent = "Edit";
   edit.addEventListener("click", onEdit);
-  actionTd.appendChild(edit);
+  actions.appendChild(edit);
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "secondary btn-sm";
+  del.textContent = "Delete";
+  if (entry.usage > 0) {
+    del.disabled = true;
+    del.title = "Used by " + entry.usage + (entry.usage === 1 ? " journey" : " journeys") + ". Remove it from them first.";
+  }
+  del.addEventListener("click", () => deleteLibraryEntry(kind, entry));
+  actions.appendChild(del);
   tr.appendChild(actionTd);
   tbody.appendChild(tr);
+}
+
+// Only entries no journey uses can be deleted; the server checks that again.
+function deleteLibraryEntry(kind, entry) {
+  const what = { requirement: "requirement", kpi: "KPI", stage: "shared stage" }[kind];
+  let question = "Delete the " + what + " '" + entry.label + "' from the library?";
+  if (kind === "stage") question += " Its component stays; it may become inactive if nothing else uses or curates it.";
+  if (!confirm(question)) return;
+  const status = document.getElementById("library-delete-status");
+  fetch("/api/library/" + kind + "/" + encodeURIComponent(entry.id), { method: "DELETE" })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (!ok) throw new Error(data.error || "delete failed");
+      if (libraryEditing && libraryEditing.kind === kind && libraryEditing.id === entry.id) closeLibraryEditor();
+      status.textContent = "Deleted the " + what + " '" + entry.label + "'.";
+      status.classList.remove("note-error");
+      status.hidden = false;
+      loadLibrary();
+    })
+    .catch(err => {
+      status.textContent = "Could not delete: " + err.message;
+      status.classList.add("note-error");
+      status.hidden = false;
+      loadLibrary();
+    });
 }
 
 function renderLibrary() {
@@ -411,12 +452,12 @@ function renderLibrary() {
   reqBody.innerHTML = "";
   kpiBody.innerHTML = "";
   stageBody.innerHTML = "";
-  (library.stages || []).forEach(e => libraryRow(stageBody, "stage", [e.label, e.component_label, e.filter_value || "not set",
+  (library.stages || []).forEach(e => libraryRow(stageBody, "stage", e, [e.label, e.component_label, e.filter_value || "not set",
     e.entry_criteria || "not set", dataViewText(e.data_views), String(e.usage)],
     () => openLibraryEditor("stage", e)));
-  library.requirements.forEach(e => libraryRow(reqBody, "requirement", [e.label, e.comment || "not set", String(e.usage)],
+  library.requirements.forEach(e => libraryRow(reqBody, "requirement", e, [e.label, e.comment || "not set", String(e.usage)],
     () => openLibraryEditor("requirement", e)));
-  library.kpis.forEach(e => libraryRow(kpiBody, "kpi", [e.label, e.formula || "not set", e.owner,
+  library.kpis.forEach(e => libraryRow(kpiBody, "kpi", e, [e.label, e.formula || "not set", e.owner,
     e.target === null || e.target === undefined ? "not set" : String(e.target), String(e.usage)],
     () => openLibraryEditor("kpi", e)));
 }

@@ -877,17 +877,23 @@ def create_app(data_dir: Path) -> Flask:
             g.parse(library_file(), format="turtle")
         return g
 
-    def library_usage():
-        """{library URI: number of journey files that refer to it}."""
-        counts = {}
+    def library_users():
+        """{library URI: [labels of the journeys whose file refers to it]}."""
+        users = {}
         for path, fg in load_instance_file_graphs().items():
-            if path.name == lib.LIBRARY_FILE_NAME or next(fg.subjects(RDF.type, MARTECH.Journey), None) is None:
+            journey = next(fg.subjects(RDF.type, MARTECH.Journey), None)
+            if path.name == lib.LIBRARY_FILE_NAME or journey is None:
                 continue
+            label = str(fg.value(journey, RDFS.label) or path.name[:-len("-instances.ttl")])
             for node in set(fg.subjects()) | set(fg.objects()):
                 uri = str(node)
                 if uri.startswith(jb.LIBRARY_NS):
-                    counts[uri] = counts.get(uri, 0) + 1
-        return counts
+                    users.setdefault(uri, []).append(label)
+        return users
+
+    def library_usage():
+        """{library URI: number of journey files that refer to it}."""
+        return {uri: len(labels) for uri, labels in library_users().items()}
 
     # Shared stages: each journey keeps its own Stage (order, KPI roll-up) based_on the library entry and
     # carrying its name, component, filter value and entry criteria. Changing the entry rewrites every
@@ -1012,6 +1018,28 @@ def create_app(data_dir: Path) -> Flask:
         for path, turtle, _ in writes:
             path.write_text(turtle, encoding="utf-8")
         return jsonify({"ok": True, "id": entry_id, "updated_journeys": [label for _, _, label in writes]})
+
+    @app.route("/api/library/<kind>/<entry_id>", methods=["DELETE"])
+    def api_delete_library_entry(kind, entry_id):
+        """Delete a library entry that no journey refers to. A used one is refused (409), because its journeys
+        would point at an entry that no longer exists."""
+        blocked = require_org_mode()
+        if blocked:
+            return blocked
+        if kind not in LIBRARY_KINDS:
+            return jsonify({"error": f"no library kind '{kind}'"}), 404
+        entries = lib.read_entries(library_file())
+        pool = entries[LIBRARY_KINDS[kind]]
+        entry = next((e for e in pool if e["id"] == entry_id), None)
+        if entry is None:
+            return jsonify({"error": f"no {kind} '{entry_id}' in the library"}), 404
+        users = sorted(library_users().get(lib.uri_for(entry_id), []))
+        if users:
+            return jsonify({"error": f"Not deleted: still used by {', '.join(users)}. "
+                                     "Remove it from those journeys first."}), 409
+        pool.remove(entry)
+        lib.write_entries(library_file(), entries)
+        return jsonify({"ok": True})
 
     @app.route("/api/journeys/<slug>", methods=["GET"])
     def api_get_journey(slug):

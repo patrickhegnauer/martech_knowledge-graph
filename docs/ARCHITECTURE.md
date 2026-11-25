@@ -132,8 +132,8 @@ Pages call the API with relative `fetch("/api/...")` URLs. It reuses `graph_expl
 | `/api/journeys/save` | POST | Journey form |
 | `/api/journeys/<slug>` | GET, DELETE | Journey form (load), Journeys page (delete) |
 | `/api/library` | GET | Journeys page, journey form |
-| `/api/library/<kind>` | POST | Create a requirement or KPI |
-| `/api/library/<kind>/<id>` | POST | Edit a requirement or KPI |
+| `/api/library/<kind>` | POST | Create a requirement, KPI or shared stage |
+| `/api/library/<kind>/<id>` | POST, DELETE | Edit a requirement, KPI or shared stage; delete one no journey uses |
 | `/api/skills`, `/api/skills/<slug>` | GET, DELETE | Skills page |
 | `/api/skills/generate` | POST | Skills page |
 | `/api/data-files`, `/api/data-files/<name>` | GET | Data Files page |
@@ -275,7 +275,9 @@ stage:       {id, label, component_uri, filter_value, entry_criteria}
 An entry's ID is the local name of its URI (`req_<slug>` / `kpi_<slug>` / `stage_<slug>`) and never changes,
 so renaming an entry doesn't break the journeys pointing at it. `GET /api/library` adds a usage count per
 entry (and, for stages, the component's key, label and data views). Deleting a journey never deletes
-library entries. Journeys saved before the library existed keep their own requirement and KPI until a
+library entries. `DELETE /api/library/<kind>/<id>` removes an entry only when no journey file refers to it
+(the same check as the usage count, `library_users()`); otherwise it answers 409 naming those journeys, so a
+journey never points at a missing entry. Journeys saved before the library existed keep their own requirement and KPI until a
 library entry is picked for them.
 
 **Shared stages** can't simply be referenced like requirements and KPIs, because a stage's `order` and

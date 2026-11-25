@@ -375,7 +375,7 @@ In the journey form, the Requirement and KPI fields each start with a picker: ch
 pick **Create new** to add one to the library. A shared entry's fields are read-only until you press
 **Edit shared entry**, because a change there changes every journey that uses it, and the form tells you how
 many journeys that is. Deleting a journey never deletes library entries; an entry that no journey uses stays
-in the library with a usage count of 0.
+in the library with a usage count of 0 until you delete it there (see below).
 
 The Journeys page has a **Shared library** section that lists every requirement, KPI and stage with its usage
 count, and lets you create and edit them there.
@@ -403,7 +403,10 @@ Things to know:
 - Journeys generated from a CSV or from Python keep their own requirement, KPI and stages unless their turtle
   links to library URIs. The CSV import can't create or link shared stages yet. The form's library pickers
   work on any journey that has been saved through it.
-- Shared stages can't be deleted yet (the same as requirements and KPIs); an unused one shows "used by 0".
+- **Delete** on a library row removes a requirement, KPI or shared stage that no journey uses ("used by 0").
+  An entry that journeys still use can't be deleted, because they would point at an entry that no longer
+  exists: remove it from those journeys (or delete them) first, and the error names them. Deleting a shared
+  stage keeps its component; if nothing else uses or curates that component, it becomes inactive.
 - The library belongs to your own data. The bundled demo data has no library, and the library refuses
   changes while the workspace is in demo mode.
 
